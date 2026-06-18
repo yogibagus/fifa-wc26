@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import Hls from "hls.js";
 import {
   Trophy,
   Calendar,
@@ -13,6 +14,13 @@ import {
   Loader2,
   CircleDot,
   Flame,
+  ArrowLeft,
+  Play,
+  Radio,
+  Volume2,
+  VolumeX,
+  Maximize,
+  Minimize,
 } from "lucide-react";
 import {
   Card,
@@ -38,6 +46,22 @@ import {
   getMatchStatus,
   getCountryFlag,
 } from "@/lib/data";
+
+// ─── Stream Channels ────────────────────────────────────────────────────────
+const STREAM_CHANNELS = [
+  {
+    id: "tv360",
+    name: "TV360 Sports",
+    quality: "HD 1080p",
+    url: "https://ec05-pop1-hlc.tv360.vn/bpk-token/gv54oov24drdv4cb6e6di66hhi2xxrz2/bpk-tv/155/output/155-audio_198800_eng_iv_5=196800-video_iv_5=3417600.m3u8",
+  },
+  {
+    id: "rtbgo",
+    name: "RTB Go",
+    quality: "HD 720p",
+    url: "https://d1211whpimeups.cloudfront.net/smil:rtbgo/chunklist_b4096000_slENG.m3u8",
+  },
+];
 
 // ─── Compact Countdown ──────────────────────────────────────────────────────
 function CountdownTimer() {
@@ -88,8 +112,239 @@ function CountdownTimer() {
   );
 }
 
+// ─── HLS Video Player ───────────────────────────────────────────────────────
+function HLSPlayer({ url, channelId }: { url: string; channelId: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Track current channel to reset state on change
+  const [currentChannelId, setCurrentChannelId] = useState(channelId);
+  if (currentChannelId !== channelId) {
+    setCurrentChannelId(channelId);
+    setIsLoading(true);
+    setError(null);
+    setIsPlaying(false);
+  }
+
+  // Initialize HLS
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Destroy previous instance
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+      });
+      hlsRef.current = hls;
+
+      hls.loadSource(url);
+      hls.attachMedia(video);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setIsLoading(false);
+      });
+
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              setError("Network error — stream may be unavailable in your region");
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              setError("Media error — attempting recovery...");
+              hls.recoverMediaError();
+              break;
+            default:
+              setError("Stream error — please try another channel");
+              hls.destroy();
+              break;
+          }
+        }
+      });
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Native HLS support (Safari)
+      video.src = url;
+      // Loading will be handled by video events naturally
+    } else {
+      // HLS not supported — set error via ref to avoid setState in effect
+      hlsRef.current = null;
+      window.requestAnimationFrame(() => {
+        setError("HLS is not supported in this browser");
+      });
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [url, channelId]);
+
+  // Fullscreen change listener
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFsChange);
+    return () => document.removeEventListener("fullscreenchange", handleFsChange);
+  }, []);
+
+  const togglePlay = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      if (video.paused) {
+        await video.play();
+        setIsPlaying(true);
+      } else {
+        video.pause();
+        setIsPlaying(false);
+      }
+    } catch {
+      // autoplay blocked
+    }
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = !video.muted;
+    setIsMuted(video.muted);
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    const container = containerRef.current;
+    if (!container) return;
+    try {
+      if (!document.fullscreenElement) {
+        await container.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch {
+      // fullscreen not supported
+    }
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative bg-black rounded-xl overflow-hidden group"
+    >
+      <video
+        ref={videoRef}
+        className="w-full aspect-video bg-black"
+        playsInline
+        onClick={togglePlay}
+      />
+
+      {/* Loading overlay */}
+      {isLoading && !error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
+          <p className="text-xs text-muted-foreground">Loading stream...</p>
+        </div>
+      )}
+
+      {/* Error overlay */}
+      {error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 gap-3 p-6">
+          <div className="p-3 rounded-full bg-red-500/10">
+            <Radio className="h-6 w-6 text-red-400" />
+          </div>
+          <p className="text-sm text-center text-red-400 max-w-sm">{error}</p>
+          <p className="text-xs text-muted-foreground">
+            Try switching to another channel
+          </p>
+        </div>
+      )}
+
+      {/* Play overlay (when paused) */}
+      {!isPlaying && !isLoading && !error && (
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer"
+          onClick={togglePlay}
+        >
+          <div className="p-5 rounded-full bg-emerald-500/20 border border-emerald-500/30 hover:bg-emerald-500/30 transition-colors">
+            <Play className="h-8 w-8 text-emerald-400 fill-emerald-400" />
+          </div>
+        </div>
+      )}
+
+      {/* Controls bar */}
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4 pt-12 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={togglePlay}
+              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+              aria-label={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? (
+                <div className="flex gap-0.5">
+                  <div className="w-3 h-4 bg-white rounded-sm" />
+                  <div className="w-3 h-4 bg-white rounded-sm" />
+                </div>
+              ) : (
+                <Play className="h-5 w-5 text-white fill-white" />
+              )}
+            </button>
+            <button
+              onClick={toggleMute}
+              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+              aria-label={isMuted ? "Unmute" : "Mute"}
+            >
+              {isMuted ? (
+                <VolumeX className="h-5 w-5 text-white" />
+              ) : (
+                <Volume2 className="h-5 w-5 text-white" />
+              )}
+            </button>
+            <div className="flex items-center gap-1.5 ml-2">
+              <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-xs text-white/80 font-medium">LIVE</span>
+            </div>
+          </div>
+          <button
+            onClick={toggleFullscreen}
+            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+            aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          >
+            {isFullscreen ? (
+              <Minimize className="h-5 w-5 text-white" />
+            ) : (
+              <Maximize className="h-5 w-5 text-white" />
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Match Card ─────────────────────────────────────────────────────────────
-function MatchCard({ match }: { match: Match }) {
+function MatchCard({
+  match,
+  onWatchLive,
+}: {
+  match: Match;
+  onWatchLive: (match: Match) => void;
+}) {
   const status = getMatchStatus(match);
   const [expanded, setExpanded] = useState(false);
 
@@ -122,12 +377,27 @@ function MatchCard({ match }: { match: Match }) {
             )}
             <span className="text-xs text-muted-foreground">{match.round}</span>
           </div>
-          {match.ground && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <MapPin className="h-3 w-3" />
-              <span className="hidden sm:inline">{match.ground}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Watch Live button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-[10px] gap-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 px-2"
+              onClick={(e) => {
+                e.stopPropagation();
+                onWatchLive(match);
+              }}
+            >
+              <Play className="h-3 w-3 fill-emerald-400" />
+              Watch
+            </Button>
+            {match.ground && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <MapPin className="h-3 w-3" />
+                <span className="hidden sm:inline">{match.ground}</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Teams and Score */}
@@ -236,7 +506,13 @@ function MatchCard({ match }: { match: Match }) {
 }
 
 // ─── Group Stage Table ──────────────────────────────────────────────────────
-function GroupTable({ group }: { group: GroupData }) {
+function GroupTable({
+  group,
+  onWatchLive,
+}: {
+  group: GroupData;
+  onWatchLive: (match: Match) => void;
+}) {
   const [showMatches, setShowMatches] = useState(false);
 
   return (
@@ -291,9 +567,7 @@ function GroupTable({ group }: { group: GroupData }) {
                       <tr
                         key={team.team}
                         className={`border-b last:border-0 ${
-                          idx < 2
-                            ? "bg-emerald-500/5"
-                            : ""
+                          idx < 2 ? "bg-emerald-500/5" : ""
                         }`}
                       >
                         <td className="py-2 pr-2">
@@ -314,9 +588,7 @@ function GroupTable({ group }: { group: GroupData }) {
                         <td className="text-center py-2 px-1 tabular-nums text-muted-foreground">
                           {team.played}
                         </td>
-                        <td className="text-center py-2 px-1 tabular-nums">
-                          {team.won}
-                        </td>
+                        <td className="text-center py-2 px-1 tabular-nums">{team.won}</td>
                         <td className="text-center py-2 px-1 tabular-nums text-muted-foreground">
                           {team.drawn}
                         </td>
@@ -358,7 +630,7 @@ function GroupTable({ group }: { group: GroupData }) {
               className="space-y-2"
             >
               {group.matches.map((match, idx) => (
-                <MatchCard key={idx} match={match} />
+                <MatchCard key={idx} match={match} onWatchLive={onWatchLive} />
               ))}
             </motion.div>
           )}
@@ -369,7 +641,13 @@ function GroupTable({ group }: { group: GroupData }) {
 }
 
 // ─── Knockout Round ─────────────────────────────────────────────────────────
-function KnockoutRoundCard({ round }: { round: KnockoutRound }) {
+function KnockoutRoundCard({
+  round,
+  onWatchLive,
+}: {
+  round: KnockoutRound;
+  onWatchLive: (match: Match) => void;
+}) {
   return (
     <div>
       <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
@@ -383,7 +661,7 @@ function KnockoutRoundCard({ round }: { round: KnockoutRound }) {
       </h3>
       <div className="grid gap-3 sm:grid-cols-2">
         {round.matches.map((match, idx) => (
-          <MatchCard key={idx} match={match} />
+          <MatchCard key={idx} match={match} onWatchLive={onWatchLive} />
         ))}
       </div>
     </div>
@@ -391,7 +669,13 @@ function KnockoutRoundCard({ round }: { round: KnockoutRound }) {
 }
 
 // ─── Schedule View ──────────────────────────────────────────────────────────
-function ScheduleView({ matches }: { matches: Match[] }) {
+function ScheduleView({
+  matches,
+  onWatchLive,
+}: {
+  matches: Match[];
+  onWatchLive: (match: Match) => void;
+}) {
   const [filter, setFilter] = useState<"all" | "completed" | "upcoming">("all");
 
   const filtered = useMemo(() => {
@@ -451,7 +735,7 @@ function ScheduleView({ matches }: { matches: Match[] }) {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {dateMatches.map((match, idx) => (
-                <MatchCard key={idx} match={match} />
+                <MatchCard key={idx} match={match} onWatchLive={onWatchLive} />
               ))}
             </div>
           </div>
@@ -575,11 +859,299 @@ function TopScorers({ data }: { data: WorldCupData }) {
   );
 }
 
+// ─── Match Detail / Streaming View ──────────────────────────────────────────
+function MatchDetailView({
+  match,
+  onBack,
+}: {
+  match: Match;
+  onBack: () => void;
+}) {
+  const [selectedChannel, setSelectedChannel] = useState(STREAM_CHANNELS[0]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-5"
+    >
+      {/* Back button + match header */}
+      <div className="flex items-start gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onBack}
+          className="mt-0.5 shrink-0 gap-1"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Back</span>
+        </Button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            {getMatchStatus(match) === "live" && (
+              <Badge className="text-[10px] px-1.5 py-0 h-5 bg-red-500 text-white animate-pulse">
+                LIVE NOW
+              </Badge>
+            )}
+            {getMatchStatus(match) === "completed" && (
+              <Badge className="text-[10px] px-1.5 py-0 h-5 bg-emerald-500/15 text-emerald-400">
+                FULL TIME
+              </Badge>
+            )}
+            {getMatchStatus(match) === "upcoming" && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">
+                UPCOMING
+              </Badge>
+            )}
+            {match.group && (
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
+                {match.group}
+              </Badge>
+            )}
+            <Badge variant="secondary" className="text-[10px] gap-1 px-1.5 py-0 h-5">
+              <Calendar className="h-2.5 w-2.5" />
+              {formatDate(match.date)}
+            </Badge>
+            {match.time && (
+              <Badge variant="secondary" className="text-[10px] gap-1 px-1.5 py-0 h-5">
+                <Clock className="h-2.5 w-2.5" />
+                {match.time}
+              </Badge>
+            )}
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-3 flex-wrap">
+            <span className="flex items-center gap-2">
+              <span className="text-2xl">{getCountryFlag(match.team1)}</span>
+              {match.team1}
+            </span>
+            {match.score?.ft ? (
+              <span className="text-emerald-400 tabular-nums">
+                {match.score.ft[0]} - {match.score.ft[1]}
+              </span>
+            ) : (
+              <span className="text-muted-foreground text-lg">vs</span>
+            )}
+            <span className="flex items-center gap-2">
+              {match.team2}
+              <span className="text-2xl">{getCountryFlag(match.team2)}</span>
+            </span>
+          </h2>
+          {match.ground && (
+            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+              <MapPin className="h-3 w-3" />
+              {match.ground}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Video Player */}
+      <HLSPlayer
+        url={selectedChannel.url}
+        channelId={selectedChannel.id}
+      />
+
+      {/* Channel Selection */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Radio className="h-3.5 w-3.5 text-emerald-400" />
+            Choose Channel
+          </CardTitle>
+          <CardDescription>
+            Select a broadcast source for this match
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {STREAM_CHANNELS.map((channel) => (
+              <button
+                key={channel.id}
+                onClick={() => setSelectedChannel(channel)}
+                className={`flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${
+                  selectedChannel.id === channel.id
+                    ? "border-emerald-500/50 bg-emerald-500/10 ring-1 ring-emerald-500/30"
+                    : "border-border/50 hover:bg-muted/30 hover:border-border"
+                }`}
+              >
+                <div
+                  className={`p-2 rounded-lg ${
+                    selectedChannel.id === channel.id
+                      ? "bg-emerald-500/20"
+                      : "bg-muted/50"
+                  }`}
+                >
+                  <Tv
+                    className={`h-4 w-4 ${
+                      selectedChannel.id === channel.id
+                        ? "text-emerald-400"
+                        : "text-muted-foreground"
+                    }`}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium">{channel.name}</p>
+                    {selectedChannel.id === channel.id && (
+                      <div className="flex items-center gap-1">
+                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-[10px] text-emerald-400 font-medium">Playing</span>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{channel.quality}</p>
+                </div>
+                <Badge
+                  variant={selectedChannel.id === channel.id ? "default" : "outline"}
+                  className={`text-[10px] shrink-0 ${
+                    selectedChannel.id === channel.id
+                      ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/30"
+                      : ""
+                  }`}
+                >
+                  {selectedChannel.id === channel.id ? "Active" : "Switch"}
+                </Badge>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Match Goals Summary */}
+      {match.score?.ft && (match.goals1?.length || 0) + (match.goals2?.length || 0) > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <CircleDot className="h-3.5 w-3.5 text-emerald-400" />
+              Match Goals
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
+                  {getCountryFlag(match.team1)} {match.team1}
+                </p>
+                <div className="space-y-1">
+                  {match.goals1?.map((g, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <span className="text-emerald-400">⚽</span>
+                      <span className="font-medium">{g.name}</span>
+                      <span className="text-muted-foreground">{g.minute}&apos;</span>
+                      {g.penalty && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                          PEN
+                        </Badge>
+                      )}
+                      {g.owngoal && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                          OG
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                  {(!match.goals1 || match.goals1.length === 0) && (
+                    <p className="text-xs text-muted-foreground">No goals</p>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5">
+                  {getCountryFlag(match.team2)} {match.team2}
+                </p>
+                <div className="space-y-1">
+                  {match.goals2?.map((g, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <span className="text-emerald-400">⚽</span>
+                      <span className="font-medium">{g.name}</span>
+                      <span className="text-muted-foreground">{g.minute}&apos;</span>
+                      {g.penalty && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                          PEN
+                        </Badge>
+                      )}
+                      {g.owngoal && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                          OG
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                  {(!match.goals2 || match.goals2.length === 0) && (
+                    <p className="text-xs text-muted-foreground">No goals</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </motion.div>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────────────
 export default function Home() {
   const [data, setData] = useState<WorldCupData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Derive initial selected match from URL
+  const [initialMatchResolved, setInitialMatchResolved] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+
+  // Sync with URL search params on initial load
+  if (!initialMatchResolved && data) {
+    setInitialMatchResolved(true);
+    const params = new URLSearchParams(window.location.search);
+    const matchIdx = params.get("match");
+    if (matchIdx) {
+      const idx = parseInt(matchIdx, 10);
+      if (!isNaN(idx) && idx >= 0 && idx < data.matches.length) {
+        setSelectedMatch(data.matches[idx]);
+      }
+    }
+  }
+
+  const handleWatchLive = useCallback(
+    (match: Match) => {
+      if (!data) return;
+      const idx = data.matches.indexOf(match);
+      const url = new URL(window.location.href);
+      if (idx >= 0) {
+        url.searchParams.set("match", String(idx));
+      }
+      window.history.pushState({}, "", url.toString());
+      setSelectedMatch(match);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    [data]
+  );
+
+  const handleBack = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("match");
+    window.history.pushState({}, "", url.toString());
+    setSelectedMatch(null);
+  }, []);
+
+  // Handle browser back button
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const matchIdx = params.get("match");
+      if (matchIdx && data) {
+        const idx = parseInt(matchIdx, 10);
+        if (!isNaN(idx) && idx >= 0 && idx < data.matches.length) {
+          setSelectedMatch(data.matches[idx]);
+          return;
+        }
+      }
+      setSelectedMatch(null);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [data]);
 
   useEffect(() => {
     fetch("/api/worldcup")
@@ -605,7 +1177,12 @@ export default function Home() {
       {/* ─── Compact Header ──────────────────────────────────────────────── */}
       <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <button
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+            onClick={() => {
+              if (selectedMatch) handleBack();
+            }}
+          >
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-emerald-500/10">
                 <Trophy className="h-4 w-4 text-emerald-400" />
@@ -619,7 +1196,7 @@ export default function Home() {
                 </p>
               </div>
             </div>
-          </div>
+          </button>
           <CountdownTimer />
         </div>
       </header>
@@ -636,111 +1213,124 @@ export default function Home() {
             <p className="text-destructive text-sm">{error}</p>
           </div>
         ) : data ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
-            className="space-y-6"
-          >
-            {/* Stats */}
-            <StatsBanner data={data} />
+          selectedMatch ? (
+            <MatchDetailView match={selectedMatch} onBack={handleBack} />
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-6"
+            >
+              {/* Stats */}
+              <StatsBanner data={data} />
 
-            {/* Top Scorers + Quick Info */}
-            <div className="grid gap-6 lg:grid-cols-3">
-              <div className="lg:col-span-2">
-                <Card className="h-full">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <Tv className="h-3.5 w-3.5 text-emerald-400" />
-                      Live Stream Schedule
-                    </CardTitle>
-                    <CardDescription>
-                      Watch every match live as it happens
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="space-y-2">
-                      {data.matches
-                        .filter((m) => !m.score?.ft)
-                        .slice(0, 5)
-                        .map((match, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors"
-                          >
-                            <div className="flex items-center gap-2 text-sm">
-                              <span>{getCountryFlag(match.team1)}</span>
-                              <span className="font-medium">{match.team1}</span>
-                              <span className="text-muted-foreground">vs</span>
-                              <span className="font-medium">{match.team2}</span>
-                              <span>{getCountryFlag(match.team2)}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {match.group && (
-                                <Badge variant="outline" className="text-[10px] px-1.5">
-                                  {match.group}
+              {/* Top Scorers + Quick Info */}
+              <div className="grid gap-6 lg:grid-cols-3">
+                <div className="lg:col-span-2">
+                  <Card className="h-full">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Tv className="h-3.5 w-3.5 text-emerald-400" />
+                        Live Stream Schedule
+                      </CardTitle>
+                      <CardDescription>
+                        Click Watch to open the live stream player
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="space-y-2">
+                        {data.matches
+                          .filter((m) => !m.score?.ft)
+                          .slice(0, 5)
+                          .map((match, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors group"
+                            >
+                              <div className="flex items-center gap-2 text-sm">
+                                <span>{getCountryFlag(match.team1)}</span>
+                                <span className="font-medium">{match.team1}</span>
+                                <span className="text-muted-foreground">vs</span>
+                                <span className="font-medium">{match.team2}</span>
+                                <span>{getCountryFlag(match.team2)}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {match.group && (
+                                  <Badge variant="outline" className="text-[10px] px-1.5">
+                                    {match.group}
+                                  </Badge>
+                                )}
+                                <Badge variant="secondary" className="text-[10px] gap-1">
+                                  <Calendar className="h-2.5 w-2.5" />
+                                  {formatDate(match.date)}
                                 </Badge>
-                              )}
-                              <Badge variant="secondary" className="text-[10px] gap-1">
-                                <Calendar className="h-2.5 w-2.5" />
-                                {formatDate(match.date)}
-                              </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-[10px] gap-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 px-2 opacity-60 group-hover:opacity-100 transition-opacity"
+                                  onClick={() => handleWatchLive(match)}
+                                >
+                                  <Play className="h-3 w-3 fill-emerald-400" />
+                                  Watch
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      {data.matches.filter((m) => !m.score?.ft).length === 0 && (
-                        <p className="text-sm text-muted-foreground text-center py-4">
-                          Tournament hasn&apos;t started yet. Stay tuned!
-                        </p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                          ))}
+                        {data.matches.filter((m) => !m.score?.ft).length === 0 && (
+                          <p className="text-sm text-muted-foreground text-center py-4">
+                            Tournament hasn&apos;t started yet. Stay tuned!
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+                <TopScorers data={data} />
               </div>
-              <TopScorers data={data} />
-            </div>
 
-            {/* Tabs */}
-            <Tabs defaultValue="groups" className="w-full">
-              <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
-                <TabsTrigger value="groups" className="gap-1.5">
-                  <Trophy className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Group</span> Stage
-                </TabsTrigger>
-                <TabsTrigger value="schedule" className="gap-1.5">
-                  <Calendar className="h-3.5 w-3.5" />
-                  Schedule
-                </TabsTrigger>
-                <TabsTrigger value="knockout" className="gap-1.5">
-                  <Flame className="h-3.5 w-3.5" />
-                  Knockout
-                </TabsTrigger>
-              </TabsList>
+              {/* Tabs */}
+              <Tabs defaultValue="groups" className="w-full">
+                <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
+                  <TabsTrigger value="groups" className="gap-1.5">
+                    <Trophy className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Group</span> Stage
+                  </TabsTrigger>
+                  <TabsTrigger value="schedule" className="gap-1.5">
+                    <Calendar className="h-3.5 w-3.5" />
+                    Schedule
+                  </TabsTrigger>
+                  <TabsTrigger value="knockout" className="gap-1.5">
+                    <Flame className="h-3.5 w-3.5" />
+                    Knockout
+                  </TabsTrigger>
+                </TabsList>
 
-              {/* Group Stage */}
-              <TabsContent value="groups" className="mt-6">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {groups.map((group) => (
-                    <GroupTable key={group.name} group={group} />
-                  ))}
-                </div>
-              </TabsContent>
+                {/* Group Stage */}
+                <TabsContent value="groups" className="mt-6">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {groups.map((group) => (
+                      <GroupTable key={group.name} group={group} onWatchLive={handleWatchLive} />
+                    ))}
+                  </div>
+                </TabsContent>
 
-              {/* Schedule */}
-              <TabsContent value="schedule" className="mt-6">
-                <ScheduleView matches={data.matches} />
-              </TabsContent>
+                {/* Schedule */}
+                <TabsContent value="schedule" className="mt-6">
+                  <ScheduleView matches={data.matches} onWatchLive={handleWatchLive} />
+                </TabsContent>
 
-              {/* Knockout */}
-              <TabsContent value="knockout" className="mt-6">
-                <div className="space-y-10">
-                  {knockouts.map((round) => (
-                    <KnockoutRoundCard key={round.name} round={round} />
-                  ))}
-                </div>
-              </TabsContent>
-            </Tabs>
-          </motion.div>
+                {/* Knockout */}
+                <TabsContent value="knockout" className="mt-6">
+                  <div className="space-y-10">
+                    {knockouts.map((round) => (
+                      <KnockoutRoundCard key={round.name} round={round} onWatchLive={handleWatchLive} />
+                    ))}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </motion.div>
+          )
         ) : null}
       </main>
 
