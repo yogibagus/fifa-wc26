@@ -70,26 +70,30 @@ Or run migrations post-deployment in Vercel's environment.
 
 ## Configuration Updates (Fixed for Vercel)
 
-✅ **Enabled standalone mode** - `output: "standalone"` in `next.config.ts` produces `.next/standalone` that Vercel's `@vercel/next` builder expects
+✅ **Standard Next.js build** - No `output: "standalone"` (Vercel's `@vercel/next` builder handles the build natively and does not consume standalone output)
 ✅ **Prisma generate in build** - `npm run build` runs `prisma generate` before `next build` to ensure the Prisma Client is available during the Vercel build
 ✅ **Updated start command** - Using `next start` with proper port handling
-✅ **Default output directory** - `.next` (handled by Vercel)
+✅ **Explicit output directory** - `outputDirectory: ".next"` in `vercel.json` to override any stale dashboard setting
 
 **Files Ready for Deployment:**
-- ✅ `next.config.ts` - Standalone output enabled
-- ✅ `vercel.json` - Streamlined Vercel configuration 
+- ✅ `next.config.ts` - Standard Next.js configuration (no standalone)
+- ✅ `vercel.json` - Explicit `outputDirectory: ".next"` 
 - ✅ `package.json` - Build runs `prisma generate && next build`
 - ✅ `.vercelignore` - Specifies files to exclude
 - ✅ `.env.example` - Template for environment variables
 
 ## Build Configuration
 
-The project uses **Next.js standalone build** (required when the Vercel builder expects `.next/standalone`):
+The project uses **standard Next.js build** (Vercel-native):
 - **Build Command**: `npm run build` (runs `prisma generate && next build`)
 - **Start Command**: `npm start` (runs `next start`)  
-- **Output Directory**: `.next` (standalone artifacts at `.next/standalone`)
+- **Output Directory**: `.next` (explicitly set in `vercel.json`)
 
-> **Note**: If you see the error `The Next.js output directory ".next/standalone" was not found`, confirm that `next.config.ts` contains `output: "standalone"`. Removing this setting while Vercel still expects standalone output causes that build failure.
+> **Note**: Do NOT enable `output: "standalone"` for Vercel deployments. Vercel's `@vercel/next` builder expects the standard `.next` output. Standalone mode produces `.next/standalone/.next/routes-manifest.json`, but Vercel looks for `.next/routes-manifest.json`, which causes the error:
+> ```
+> The file "/vercel/path0/.next/standalone/routes-manifest.json" couldn't be found.
+> ```
+> Also verify in the Vercel dashboard under **Settings → General → Output Directory** that it is either empty or set to `.next` (NOT `.next/standalone`).
 
 ## Troubleshooting
 
