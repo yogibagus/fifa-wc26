@@ -871,19 +871,18 @@ function StatsBanner({ data }: { data: WorldCupData }) {
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+    <div className="flex gap-2 sm:gap-3">
       {stats.map((stat) => (
-        <Card key={stat.label}>
-          <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
-            <div className="p-1.5 sm:p-2 rounded-lg bg-emerald-500/10">
-              <stat.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-lg sm:text-xl font-bold tabular-nums">{stat.value}</p>
-              <p className="text-[10px] sm:text-[11px] text-muted-foreground">{stat.label}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div
+          key={stat.label}
+          className="flex-1 flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg border border-border/50 bg-card"
+        >
+          <stat.icon className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-base sm:text-lg font-bold tabular-nums leading-tight">{stat.value}</p>
+            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-tight truncate">{stat.label}</p>
+          </div>
+        </div>
       ))}
     </div>
   );
