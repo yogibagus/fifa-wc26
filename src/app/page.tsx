@@ -55,6 +55,24 @@ const STREAM_CHANNELS = [
     quality: "HD 720p",
     url: "https://d1211whpimeups.cloudfront.net/smil:rtbgo/chunklist_b4096000_slENG.m3u8",
   },
+  {
+    id: "rtb2",
+    name: "RTB 2",
+    quality: "HD 720p",
+    url: "https://d1211whpimeups.cloudfront.net/smil:rtb2/playlist.m3u8",
+  },
+  {
+    id: "vtv3",
+    name: "VTV3",
+    quality: "HD",
+    url: "https://live.fptplay53.net/live/media/vtv3/live247-hls-avc/index.m3u8",
+  },
+  {
+    id: "vtv6",
+    name: "VTV6",
+    quality: "HD",
+    url: "https://live-a.fptplay53.net/live/media/vtv6/live247-hls-avc/index.m3u8",
+  },
 ];
 
 // ─── HLS Video Player ───────────────────────────────────────────────────────
