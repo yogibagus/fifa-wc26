@@ -45,6 +45,7 @@ import {
   formatDate,
   getMatchStatus,
   getCountryFlag,
+  convertTimeToUserTimezone,
 } from "@/lib/data";
 
 // ─── Stream Channels ────────────────────────────────────────────────────────
@@ -414,7 +415,7 @@ function MatchCard({
                 <div className="flex items-center gap-1">
                   <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground" />
                   <span className="text-[10px] sm:text-xs text-muted-foreground">
-                    {match.time || "TBD"}
+                    {match.time ? `Local time: ${convertTimeToUserTimezone(match.date, match.time).date} ${convertTimeToUserTimezone(match.date, match.time).time}` : "TBD"}
                   </span>
                 </div>
               )}
@@ -449,41 +450,57 @@ function MatchCard({
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden"
                 >
-                  <div className="px-3 sm:px-4 pb-2 sm:pb-3 pt-1 border-t border-border/30 space-y-1">
-                    {match.goals1?.map((g, i) => (
-                      <div key={`g1-${i}`} className="flex items-center gap-2 text-xs">
-                        <span className="text-emerald-400">⚽</span>
-                        <span className="font-medium">{g.name}</span>
-                        <span className="text-muted-foreground">{g.minute}&apos;</span>
-                        {g.penalty && (
-                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
-                            PEN
-                          </Badge>
-                        )}
-                        {g.owngoal && (
-                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
-                            OG
-                          </Badge>
-                        )}
+                  <div className="px-3 sm:px-4 pb-2 sm:pb-3 pt-1 border-t border-border/30 space-y-3">
+                    {match.goals1 && match.goals1.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          <span className="text-lg">{getCountryFlag(match.team1)}</span>
+                          {match.team1}
+                        </div>
+                        {match.goals1.map((g, i) => (
+                          <div key={`g1-${i}`} className="flex items-center gap-2 text-xs ml-2">
+                            <span className="text-emerald-400">⚽</span>
+                            <span className="font-medium">{g.name}</span>
+                            <span className="text-muted-foreground">{g.minute}&apos;</span>
+                            {g.penalty && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                                PEN
+                              </Badge>
+                            )}
+                            {g.owngoal && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                                OG
+                              </Badge>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                    {match.goals2?.map((g, i) => (
-                      <div key={`g2-${i}`} className="flex items-center gap-2 text-xs">
-                        <span className="text-emerald-400">⚽</span>
-                        <span className="font-medium">{g.name}</span>
-                        <span className="text-muted-foreground">{g.minute}&apos;</span>
-                        {g.penalty && (
-                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
-                            PEN
-                          </Badge>
-                        )}
-                        {g.owngoal && (
-                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
-                            OG
-                          </Badge>
-                        )}
+                    )}
+                    {match.goals2 && match.goals2.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          <span className="text-lg">{getCountryFlag(match.team2)}</span>
+                          {match.team2}
+                        </div>
+                        {match.goals2.map((g, i) => (
+                          <div key={`g2-${i}`} className="flex items-center gap-2 text-xs ml-2">
+                            <span className="text-emerald-400">⚽</span>
+                            <span className="font-medium">{g.name}</span>
+                            <span className="text-muted-foreground">{g.minute}&apos;</span>
+                            {g.penalty && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                                PEN
+                              </Badge>
+                            )}
+                            {g.owngoal && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                                OG
+                              </Badge>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -820,11 +837,11 @@ function LiveStreamSchedule({
                       <span className="font-medium truncate">{match.team2}</span>
                       <span className="text-sm sm:text-base">{getCountryFlag(match.team2)}</span>
                     </div>
-                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 sm:ml-2">
+                    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 sm:ml-2 flex-wrap">
                       {match.time && (
-                        <Badge variant="outline" className="text-[9px] sm:text-[10px] gap-0.5 sm:gap-1 px-1 sm:px-1.5 py-0 h-4 sm:h-5">
+                        <Badge variant="outline" className="text-[9px] sm:text-[10px] gap-0.5 sm:gap-1 px-1 sm:px-1.5 py-0 h-4 sm:h-5 whitespace-nowrap">
                           <Clock className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
-                          {match.time}
+                          Local time: {convertTimeToUserTimezone(match.date, match.time).date} {convertTimeToUserTimezone(match.date, match.time).time}
                         </Badge>
                       )}
                       {match.group && (
@@ -871,16 +888,16 @@ function StatsBanner({ data }: { data: WorldCupData }) {
   ];
 
   return (
-    <div className="flex gap-2 sm:gap-3">
+    <div className="flex gap-1.5 sm:gap-3 w-full overflow-x-auto pb-2">
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className="flex-1 flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg border border-border/50 bg-card"
+          className="flex-shrink-0 w-[calc(25%-6px)] sm:flex-1 flex flex-col items-center gap-1 px-2 py-2 sm:px-3 sm:py-2 rounded-lg border border-border/50 bg-card"
         >
-          <stat.icon className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-          <div className="min-w-0">
-            <p className="text-base sm:text-lg font-bold tabular-nums leading-tight">{stat.value}</p>
-            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-tight truncate">{stat.label}</p>
+          <stat.icon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-emerald-400 shrink-0" />
+          <div className="text-center min-w-0 w-full">
+            <p className="text-sm sm:text-lg font-bold tabular-nums leading-tight">{stat.value}</p>
+            <p className="text-[8px] sm:text-[10px] text-muted-foreground leading-tight line-clamp-2 break-words">{stat.label}</p>
           </div>
         </div>
       ))}
@@ -1024,7 +1041,7 @@ function MatchDetailView({
             {match.time && (
               <Badge variant="secondary" className="text-[9px] sm:text-[10px] gap-0.5 sm:gap-1 px-1 sm:px-1.5 py-0 h-4 sm:h-5">
                 <Clock className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
-                {match.time}
+                Local time: {convertTimeToUserTimezone(match.date, match.time).date} {convertTimeToUserTimezone(match.date, match.time).time}
               </Badge>
             )}
           </div>

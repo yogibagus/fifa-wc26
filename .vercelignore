@@ -1,0 +1,16 @@
+.git
+.gitignore
+README.md
+docs
+.env
+.env.local
+.env.*.local
+node_modules
+npm-debug.log
+dev.log
+.next/cache
+prisma/migrations
+.zscripts
+examples
+download
+tool-results

@@ -110,17 +110,50 @@ export function formatDate(dateStr: string): string {
     weekday: "short",
     month: "short",
     day: "numeric",
-    timeZone: "UTC",
   });
+}
+
+export function convertTimeToUserTimezone(dateStr: string, timeStr: string): { time: string; date: string } {
+  if (!timeStr || timeStr === "TBD") return { time: timeStr, date: dateStr };
+  
+  // Parse time and timezone offset from format like "13:00 UTC-6"
+  const match = timeStr.match(/(\d{1,2}):(\d{2})(?:\s+UTC([+-]\d+))?/);
+  if (!match) return { time: timeStr, date: dateStr };
+  
+  const [, hourStr, minuteStr, utcOffsetStr] = match;
+  const hour = parseInt(hourStr);
+  const minute = parseInt(minuteStr);
+  const utcOffset = utcOffsetStr ? parseInt(utcOffsetStr) : 0; // Offset in hours
+  
+  // Create a UTC date from the local match time
+  // If match is "13:00 UTC-6", that means 13:00 in UTC-6 = 19:00 UTC
+  const utcDate = new Date(dateStr + "T" + hourStr + ":" + minuteStr + ":00Z");
+  utcDate.setHours(utcDate.getHours() - utcOffset);
+  
+  // Now convert to user's local timezone
+  const localTime = utcDate.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+  
+  const localDate = utcDate.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  
+  return { time: localTime, date: localDate };
 }
 
 export function getMatchStatus(match: Match): "completed" | "upcoming" | "live" {
   if (match.score?.ft) return "completed";
   const matchDate = new Date(match.date + "T00:00:00Z");
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (matchDate.getTime() === today.getTime()) return "live";
-  if (matchDate < today) return "completed";
+  const userToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const userMatchDate = new Date(matchDate.getFullYear(), matchDate.getMonth(), matchDate.getDate());
+  if (userMatchDate.getTime() === userToday.getTime()) return "live";
+  if (matchDate < now) return "completed";
   return "upcoming";
 }
 
