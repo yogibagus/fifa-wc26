@@ -67,6 +67,20 @@ function HLSPlayer({ url, channelId }: { url: string; channelId: string }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showControls, setShowControls] = useState(true);
+
+  // Auto-hide controls after 3s when playing
+  useEffect(() => {
+    if (isPlaying) {
+      const timer = setTimeout(() => setShowControls(false), 3000);
+      return () => clearTimeout(timer);
+    }
+    // When not playing, controls stay visible (initial state is true)
+  }, [isPlaying]);
+
+  const revealControls = useCallback(() => {
+    setShowControls(true);
+  }, []);
 
   // Track current channel to reset state on change
   const [currentChannelId, setCurrentChannelId] = useState(channelId);
@@ -195,7 +209,21 @@ function HLSPlayer({ url, channelId }: { url: string; channelId: string }) {
         ref={videoRef}
         className="w-full aspect-video bg-black"
         playsInline
-        onClick={togglePlay}
+        onClick={() => {
+          if (showControls) {
+            togglePlay();
+          } else {
+            revealControls();
+          }
+        }}
+        onTouchEnd={(e) => {
+          e.preventDefault();
+          if (showControls) {
+            togglePlay();
+          } else {
+            revealControls();
+          }
+        }}
       />
 
       {/* Loading overlay */}
@@ -220,7 +248,7 @@ function HLSPlayer({ url, channelId }: { url: string; channelId: string }) {
       )}
 
       {/* Play overlay (when paused) */}
-      {!isPlaying && !isLoading && !error && (
+      {!isPlaying && !isLoading && !error && showControls && (
         <div
           className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer"
           onClick={togglePlay}
@@ -232,12 +260,17 @@ function HLSPlayer({ url, channelId }: { url: string; channelId: string }) {
       )}
 
       {/* Controls bar */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4 pt-12 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+      <div
+        className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-3 sm:p-4 pt-10 sm:pt-12 transition-opacity duration-300 ${
+          showControls ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
-              onClick={togglePlay}
-              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+              onClick={() => { togglePlay(); revealControls(); }}
+              className="p-2 sm:p-2 rounded-lg hover:bg-white/10 active:bg-white/20 transition-colors"
               aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? (
@@ -250,8 +283,8 @@ function HLSPlayer({ url, channelId }: { url: string; channelId: string }) {
               )}
             </button>
             <button
-              onClick={toggleMute}
-              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+              onClick={() => { toggleMute(); revealControls(); }}
+              className="p-2 rounded-lg hover:bg-white/10 active:bg-white/20 transition-colors"
               aria-label={isMuted ? "Unmute" : "Mute"}
             >
               {isMuted ? (
@@ -260,14 +293,14 @@ function HLSPlayer({ url, channelId }: { url: string; channelId: string }) {
                 <Volume2 className="h-5 w-5 text-white" />
               )}
             </button>
-            <div className="flex items-center gap-1.5 ml-2">
+            <div className="flex items-center gap-1.5 ml-1 sm:ml-2">
               <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-xs text-white/80 font-medium">LIVE</span>
+              <span className="text-[10px] sm:text-xs text-white/80 font-medium">LIVE</span>
             </div>
           </div>
           <button
-            onClick={toggleFullscreen}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+            onClick={() => { toggleFullscreen(); revealControls(); }}
+            className="p-2 rounded-lg hover:bg-white/10 active:bg-white/20 transition-colors"
             aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           >
             {isFullscreen ? (
