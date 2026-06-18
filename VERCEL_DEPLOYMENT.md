@@ -70,26 +70,26 @@ Or run migrations post-deployment in Vercel's environment.
 
 ## Configuration Updates (Fixed for Vercel)
 
-✅ **Removed standalone mode** - Using standard Next.js build for maximum Vercel compatibility
-✅ **Simplified build script** - Now just `next build` 
+✅ **Enabled standalone mode** - `output: "standalone"` in `next.config.ts` produces `.next/standalone` that Vercel's `@vercel/next` builder expects
+✅ **Prisma generate in build** - `npm run build` runs `prisma generate` before `next build` to ensure the Prisma Client is available during the Vercel build
 ✅ **Updated start command** - Using `next start` with proper port handling
-✅ **Removed custom output directory** - Using Vercel's default `.next` configuration
+✅ **Default output directory** - `.next` (handled by Vercel)
 
 **Files Ready for Deployment:**
-- ✅ `next.config.ts` - Simplified to standard Next.js configuration
+- ✅ `next.config.ts` - Standalone output enabled
 - ✅ `vercel.json` - Streamlined Vercel configuration 
-- ✅ `package.json` - Build and start scripts updated
+- ✅ `package.json` - Build runs `prisma generate && next build`
 - ✅ `.vercelignore` - Specifies files to exclude
 - ✅ `.env.example` - Template for environment variables
 
 ## Build Configuration
 
-The project now uses **standard Next.js build**:
-- **Build Command**: `npm run build` (runs `next build`)
+The project uses **Next.js standalone build** (required when the Vercel builder expects `.next/standalone`):
+- **Build Command**: `npm run build` (runs `prisma generate && next build`)
 - **Start Command**: `npm start` (runs `next start`)  
-- **Output Directory**: `.next` (default, handled by Vercel)
+- **Output Directory**: `.next` (standalone artifacts at `.next/standalone`)
 
-This approach is more reliable than standalone mode and has better Vercel support.
+> **Note**: If you see the error `The Next.js output directory ".next/standalone" was not found`, confirm that `next.config.ts` contains `output: "standalone"`. Removing this setting while Vercel still expects standalone output causes that build failure.
 
 ## Troubleshooting
 
