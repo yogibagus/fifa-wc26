@@ -921,50 +921,51 @@ function TopScorers({ data }: { data: WorldCupData }) {
   if (scorers.length === 0) return null;
 
   return (
-    <Card className="h-full">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <Flame className="h-3.5 w-3.5 text-orange-400" />
-          Top Scorers
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="space-y-1">
-          {scorers.map((s, idx) => (
-            <div
-              key={s.name}
-              className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors"
-            >
-              <div className="flex items-center gap-2.5">
-                <span
-                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                    idx === 0
-                      ? "bg-amber-500/20 text-amber-400"
-                      : idx === 1
-                      ? "bg-gray-400/20 text-gray-300"
-                      : idx === 2
-                      ? "bg-amber-700/20 text-amber-600"
-                      : "bg-muted/50 text-muted-foreground"
-                  }`}
-                >
-                  {idx + 1}
-                </span>
-                <div>
-                  <p className="text-sm font-medium">{s.name}</p>
-                  <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    {getCountryFlag(s.team)} {s.team}
-                  </p>
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Flame className="h-4 w-4 text-orange-400" />
+        <h2 className="text-sm font-semibold">Top Scorers</h2>
+        <Badge variant="secondary" className="text-[10px]">{scorers.length} players</Badge>
+      </div>
+      <Card className="h-full">
+        <CardContent className="p-2.5 sm:p-4">
+          <div className="space-y-1">
+            {scorers.map((s, idx) => (
+              <div
+                key={s.name}
+                className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center gap-2 sm:gap-2.5">
+                  <span
+                    className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[9px] sm:text-[10px] font-bold ${
+                      idx === 0
+                        ? "bg-amber-500/20 text-amber-400"
+                        : idx === 1
+                        ? "bg-gray-400/20 text-gray-300"
+                        : idx === 2
+                        ? "bg-amber-700/20 text-amber-600"
+                        : "bg-muted/50 text-muted-foreground"
+                    }`}
+                  >
+                    {idx + 1}
+                  </span>
+                  <div>
+                    <p className="text-xs sm:text-sm font-medium">{s.name}</p>
+                    <p className="text-[10px] sm:text-[11px] text-muted-foreground flex items-center gap-1">
+                      {getCountryFlag(s.team)} {s.team}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 sm:gap-1.5">
+                  <span className="text-base sm:text-lg font-bold tabular-nums text-emerald-400">{s.goals}</span>
+                  <span className="text-[10px] sm:text-xs text-muted-foreground">goals</span>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-lg font-bold tabular-nums text-emerald-400">{s.goals}</span>
-                <span className="text-xs text-muted-foreground">goals</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
