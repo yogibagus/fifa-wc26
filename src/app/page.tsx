@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Trophy,
   Calendar,
@@ -13,7 +13,6 @@ import {
   Loader2,
   CircleDot,
   Flame,
-  ArrowRight,
 } from "lucide-react";
 import {
   Card,
@@ -26,7 +25,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   type WorldCupData,
   type Match,
@@ -41,7 +39,7 @@ import {
   getCountryFlag,
 } from "@/lib/data";
 
-// ─── Countdown Timer ────────────────────────────────────────────────────────
+// ─── Compact Countdown ──────────────────────────────────────────────────────
 function CountdownTimer() {
   const targetDate = new Date("2026-06-11T18:00:00Z").getTime();
 
@@ -69,24 +67,23 @@ function CountdownTimer() {
   }, [targetDate]);
 
   return (
-    <div className="flex gap-3 sm:gap-4 justify-center">
-      {[
-        { label: "Days", value: timeLeft.days },
-        { label: "Hours", value: timeLeft.hours },
-        { label: "Minutes", value: timeLeft.minutes },
-        { label: "Seconds", value: timeLeft.seconds },
-      ].map((item) => (
-        <div key={item.label} className="flex flex-col items-center">
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2 sm:px-5 sm:py-3 min-w-[60px] sm:min-w-[80px] border border-white/20">
-            <span className="text-2xl sm:text-4xl font-bold tabular-nums text-white">
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-muted-foreground hidden sm:inline">Kickoff in</span>
+      <div className="flex items-center gap-1">
+        {[
+          { label: "d", value: timeLeft.days },
+          { label: "h", value: timeLeft.hours },
+          { label: "m", value: timeLeft.minutes },
+          { label: "s", value: timeLeft.seconds },
+        ].map((item) => (
+          <span key={item.label} className="inline-flex items-baseline gap-0.5">
+            <span className="text-sm font-bold tabular-nums text-emerald-400">
               {String(item.value).padStart(2, "0")}
             </span>
-          </div>
-          <span className="text-[10px] sm:text-xs text-white/70 mt-1.5 uppercase tracking-wider font-medium">
-            {item.label}
+            <span className="text-[10px] text-muted-foreground">{item.label}</span>
           </span>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -100,13 +97,16 @@ function MatchCard({ match }: { match: Match }) {
     match.goals1 && match.goals2 && (match.goals1.length > 0 || match.goals2.length > 0);
 
   return (
-    <Card className="overflow-hidden transition-all hover:shadow-md border-border/50">
+    <Card className="overflow-hidden transition-all hover:shadow-md hover:shadow-emerald-500/5">
       <CardContent className="p-0">
         {/* Status bar */}
-        <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b border-border/50">
+        <div className="flex items-center justify-between px-4 py-2 bg-muted/30 border-b border-border/30">
           <div className="flex items-center gap-2">
             {status === "completed" && (
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+              <Badge
+                variant="secondary"
+                className="text-[10px] px-1.5 py-0 h-5 bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
+              >
                 FT
               </Badge>
             )}
@@ -120,14 +120,12 @@ function MatchCard({ match }: { match: Match }) {
                 Upcoming
               </Badge>
             )}
-            <span className="text-xs text-muted-foreground">
-              {match.round}
-            </span>
+            <span className="text-xs text-muted-foreground">{match.round}</span>
           </div>
           {match.ground && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <MapPin className="h-3 w-3" />
-              {match.ground}
+              <span className="hidden sm:inline">{match.ground}</span>
             </div>
           )}
         </div>
@@ -167,7 +165,7 @@ function MatchCard({ match }: { match: Match }) {
           <>
             <button
               onClick={() => setExpanded(!expanded)}
-              className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border-t border-border/50"
+              className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border-t border-border/30"
             >
               {expanded ? (
                 <ChevronUp className="h-3 w-3" />
@@ -185,10 +183,10 @@ function MatchCard({ match }: { match: Match }) {
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden"
                 >
-                  <div className="px-4 pb-3 pt-1 border-t border-border/50 space-y-1">
+                  <div className="px-4 pb-3 pt-1 border-t border-border/30 space-y-1">
                     {match.goals1?.map((g, i) => (
                       <div key={`g1-${i}`} className="flex items-center gap-2 text-xs">
-                        <span className="text-emerald-600 dark:text-emerald-400">⚽</span>
+                        <span className="text-emerald-400">⚽</span>
                         <span className="font-medium">{g.name}</span>
                         <span className="text-muted-foreground">{g.minute}&apos;</span>
                         {g.penalty && (
@@ -205,7 +203,7 @@ function MatchCard({ match }: { match: Match }) {
                     ))}
                     {match.goals2?.map((g, i) => (
                       <div key={`g2-${i}`} className="flex items-center gap-2 text-xs">
-                        <span className="text-emerald-600 dark:text-emerald-400">⚽</span>
+                        <span className="text-emerald-400">⚽</span>
                         <span className="font-medium">{g.name}</span>
                         <span className="text-muted-foreground">{g.minute}&apos;</span>
                         {g.penalty && (
@@ -228,7 +226,7 @@ function MatchCard({ match }: { match: Match }) {
         )}
 
         {/* Date footer */}
-        <div className="flex items-center gap-1.5 px-4 py-2 bg-muted/30 border-t border-border/50 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5 px-4 py-2 bg-muted/20 border-t border-border/30 text-xs text-muted-foreground">
           <Calendar className="h-3 w-3" />
           {formatDate(match.date)}
         </div>
@@ -242,11 +240,11 @@ function GroupTable({ group }: { group: GroupData }) {
   const [showMatches, setShowMatches] = useState(false);
 
   return (
-    <Card className="overflow-hidden">
+    <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Trophy className="h-4 w-4 text-amber-500" />
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Trophy className="h-3.5 w-3.5 text-emerald-400" />
             {group.name}
           </CardTitle>
           <Button
@@ -278,7 +276,7 @@ function GroupTable({ group }: { group: GroupData }) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-muted-foreground text-xs">
-                      <th className="text-left py-2 pr-2 font-medium">#</th>
+                      <th className="text-left py-2 pr-2 font-medium w-6">#</th>
                       <th className="text-left py-2 pr-2 font-medium">Team</th>
                       <th className="text-center py-2 px-1 font-medium">P</th>
                       <th className="text-center py-2 px-1 font-medium">W</th>
@@ -294,7 +292,7 @@ function GroupTable({ group }: { group: GroupData }) {
                         key={team.team}
                         className={`border-b last:border-0 ${
                           idx < 2
-                            ? "bg-emerald-50/50 dark:bg-emerald-950/20"
+                            ? "bg-emerald-500/5"
                             : ""
                         }`}
                       >
@@ -302,8 +300,8 @@ function GroupTable({ group }: { group: GroupData }) {
                           <span
                             className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
                               idx < 2
-                                ? "bg-emerald-500 text-white"
-                                : "bg-muted text-muted-foreground"
+                                ? "bg-emerald-500/20 text-emerald-400"
+                                : "bg-muted/50 text-muted-foreground"
                             }`}
                           >
                             {idx + 1}
@@ -328,7 +326,7 @@ function GroupTable({ group }: { group: GroupData }) {
                         <td className="text-center py-2 px-1 tabular-nums hidden sm:table-cell">
                           {team.goalDifference > 0 ? `+${team.goalDifference}` : team.goalDifference}
                         </td>
-                        <td className="text-center py-2 pl-1 tabular-nums font-bold">
+                        <td className="text-center py-2 pl-1 tabular-nums font-bold text-emerald-400">
                           {team.points}
                         </td>
                       </tr>
@@ -345,7 +343,7 @@ function GroupTable({ group }: { group: GroupData }) {
               </div>
               {group.standings.length > 0 && (
                 <p className="text-[10px] text-muted-foreground mt-2">
-                  <span className="inline-block w-2 h-2 rounded-sm bg-emerald-500 mr-1" />
+                  <span className="inline-block w-2 h-2 rounded-sm bg-emerald-500/20 mr-1 border border-emerald-500/30" />
                   Top 2 qualify for Round of 32
                 </p>
               )}
@@ -375,12 +373,12 @@ function KnockoutRoundCard({ round }: { round: KnockoutRound }) {
   return (
     <div>
       <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
-        {round.name === "Final" && <Trophy className="h-5 w-5 text-amber-500" />}
-        {round.name === "Semi-final" && <Flame className="h-5 w-5 text-orange-500" />}
-        {round.name === "Quarter-final" && <CircleDot className="h-5 w-5 text-emerald-500" />}
-        {round.name === "Round of 32" && <Tv className="h-5 w-5 text-blue-500" />}
-        {round.name === "Round of 16" && <Tv className="h-5 w-5 text-violet-500" />}
-        {round.name === "Match for third place" && <Trophy className="h-5 w-5 text-amber-700" />}
+        {round.name === "Final" && <Trophy className="h-5 w-5 text-amber-400" />}
+        {round.name === "Semi-final" && <Flame className="h-5 w-5 text-orange-400" />}
+        {round.name === "Quarter-final" && <CircleDot className="h-5 w-5 text-emerald-400" />}
+        {round.name === "Round of 32" && <Tv className="h-5 w-5 text-sky-400" />}
+        {round.name === "Round of 16" && <Tv className="h-5 w-5 text-violet-400" />}
+        {round.name === "Match for third place" && <Trophy className="h-5 w-5 text-amber-600" />}
         {round.name}
       </h3>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -401,7 +399,6 @@ function ScheduleView({ matches }: { matches: Match[] }) {
     return matches.filter((m) => getMatchStatus(m) === filter);
   }, [matches, filter]);
 
-  // Group by date
   const grouped = useMemo(() => {
     const map = new Map<string, Match[]>();
     for (const m of filtered) {
@@ -483,10 +480,10 @@ function StatsBanner({ data }: { data: WorldCupData }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {stats.map((stat) => (
-        <Card key={stat.label} className="border-border/50">
+        <Card key={stat.label}>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <stat.icon className="h-4 w-4 text-primary" />
+            <div className="p-2 rounded-lg bg-emerald-500/10">
+              <stat.icon className="h-4 w-4 text-emerald-400" />
             </div>
             <div>
               <p className="text-xl font-bold tabular-nums">{stat.value}</p>
@@ -531,15 +528,15 @@ function TopScorers({ data }: { data: WorldCupData }) {
   if (scorers.length === 0) return null;
 
   return (
-    <Card className="border-border/50">
+    <Card className="h-full">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Flame className="h-4 w-4 text-orange-500" />
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Flame className="h-3.5 w-3.5 text-orange-400" />
           Top Scorers
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="space-y-2">
+        <div className="space-y-1">
           {scorers.map((s, idx) => (
             <div
               key={s.name}
@@ -547,14 +544,14 @@ function TopScorers({ data }: { data: WorldCupData }) {
             >
               <div className="flex items-center gap-2.5">
                 <span
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
                     idx === 0
-                      ? "bg-amber-500 text-white"
+                      ? "bg-amber-500/20 text-amber-400"
                       : idx === 1
-                      ? "bg-gray-400 text-white"
+                      ? "bg-gray-400/20 text-gray-300"
                       : idx === 2
-                      ? "bg-amber-700 text-white"
-                      : "bg-muted text-muted-foreground"
+                      ? "bg-amber-700/20 text-amber-600"
+                      : "bg-muted/50 text-muted-foreground"
                   }`}
                 >
                   {idx + 1}
@@ -567,7 +564,7 @@ function TopScorers({ data }: { data: WorldCupData }) {
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-lg font-bold tabular-nums">{s.goals}</span>
+                <span className="text-lg font-bold tabular-nums text-emerald-400">{s.goals}</span>
                 <span className="text-xs text-muted-foreground">goals</span>
               </div>
             </div>
@@ -605,56 +602,33 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* ─── Hero ─────────────────────────────────────────────────────────── */}
-      <header className="relative overflow-hidden">
-        {/* Background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.1),transparent_50%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(16,185,129,0.3),transparent_50%)]" />
-
-        {/* Decorative elements */}
-        <div className="absolute top-10 left-10 w-20 h-20 rounded-full bg-white/5 blur-xl" />
-        <div className="absolute bottom-10 right-10 w-32 h-32 rounded-full bg-emerald-400/10 blur-2xl" />
-        <div className="absolute top-1/2 left-1/3 w-64 h-64 rounded-full bg-teal-500/5 blur-3xl" />
-
-        <div className="relative z-10 max-w-6xl mx-auto px-4 py-12 sm:py-20 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <Badge className="mb-4 bg-emerald-500/20 text-emerald-200 border-emerald-400/30 hover:bg-emerald-500/30">
-              <CircleDot className="h-3 w-3 mr-1" />
-              United States • Mexico • Canada
-            </Badge>
-
-            <h1 className="text-4xl sm:text-6xl font-extrabold text-white mb-2 tracking-tight">
-              FIFA World Cup
-            </h1>
-            <div className="flex items-center justify-center gap-3 mb-6">
-              <span className="text-5xl sm:text-7xl font-black text-emerald-300">2026</span>
+      {/* ─── Compact Header ──────────────────────────────────────────────── */}
+      <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-md bg-emerald-500/10">
+                <Trophy className="h-4 w-4 text-emerald-400" />
+              </div>
+              <div>
+                <h1 className="text-sm font-bold leading-none">
+                  FIFA World Cup 2026
+                </h1>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  USA · Mexico · Canada
+                </p>
+              </div>
             </div>
-
-            <p className="text-emerald-200/80 text-sm sm:text-base max-w-xl mx-auto mb-8">
-              Follow every match, track group standings, and watch the knockout
-              bracket unfold. 48 teams, 104 matches, 1 champion.
-            </p>
-
-            <CountdownTimer />
-
-            <div className="flex items-center justify-center gap-2 mt-6 text-emerald-300/60 text-xs">
-              <ArrowRight className="h-3 w-3" />
-              Tournament kicks off June 11, 2026
-            </div>
-          </motion.div>
+          </div>
+          <CountdownTimer />
         </div>
       </header>
 
       {/* ─── Main Content ────────────────────────────────────────────────── */}
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8">
+      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+            <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
             <p className="text-muted-foreground text-sm">Loading World Cup data...</p>
           </div>
         ) : error ? (
@@ -665,8 +639,8 @@ export default function Home() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-            className="space-y-8"
+            transition={{ duration: 0.3 }}
+            className="space-y-6"
           >
             {/* Stats */}
             <StatsBanner data={data} />
@@ -674,10 +648,10 @@ export default function Home() {
             {/* Top Scorers + Quick Info */}
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2">
-                <Card className="border-border/50 h-full">
+                <Card className="h-full">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Tv className="h-4 w-4 text-emerald-500" />
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Tv className="h-3.5 w-3.5 text-emerald-400" />
                       Live Stream Schedule
                     </CardTitle>
                     <CardDescription>
@@ -685,14 +659,14 @@ export default function Home() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {data.matches
                         .filter((m) => !m.score?.ft)
                         .slice(0, 5)
                         .map((match, idx) => (
                           <div
                             key={idx}
-                            className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/50 transition-colors"
+                            className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors"
                           >
                             <div className="flex items-center gap-2 text-sm">
                               <span>{getCountryFlag(match.team1)}</span>
@@ -771,15 +745,15 @@ export default function Home() {
       </main>
 
       {/* ─── Footer ──────────────────────────────────────────────────────── */}
-      <footer className="border-t bg-muted/30 mt-auto">
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+      <footer className="border-t border-border/50 mt-auto">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <CircleDot className="h-4 w-4 text-emerald-500" />
-              <span className="text-sm font-semibold">FIFA World Cup 2026</span>
+              <CircleDot className="h-3.5 w-3.5 text-emerald-400" />
+              <span className="text-xs font-medium">FIFA World Cup 2026</span>
             </div>
-            <p className="text-xs text-muted-foreground text-center">
-              Data sourced from{" "}
+            <p className="text-[11px] text-muted-foreground text-center">
+              Data from{" "}
               <a
                 href="https://github.com/openfootball/worldcup.json"
                 target="_blank"
@@ -788,10 +762,10 @@ export default function Home() {
               >
                 openfootball
               </a>
-              . Not affiliated with FIFA. For informational purposes only.
+              . Not affiliated with FIFA.
             </p>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span>🇺🇸 🇲🇽 🇨🇦</span>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              🇺🇸 🇲🇽 🇨🇦
             </div>
           </div>
         </div>

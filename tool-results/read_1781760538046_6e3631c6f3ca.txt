@@ -1,0 +1,802 @@
+     1→"use client";
+     2→
+     3→import { useEffect, useState, useMemo } from "react";
+     4→import { motion, AnimatePresence } from "framer-motion";
+     5→import {
+     6→  Trophy,
+     7→  Calendar,
+     8→  MapPin,
+     9→  Clock,
+    10→  ChevronDown,
+    11→  ChevronUp,
+    12→  Tv,
+    13→  Loader2,
+    14→  CircleDot,
+    15→  Flame,
+    16→  ArrowRight,
+    17→} from "lucide-react";
+    18→import {
+    19→  Card,
+    20→  CardContent,
+    21→  CardDescription,
+    22→  CardHeader,
+    23→  CardTitle,
+    24→} from "@/components/ui/card";
+    25→import { Badge } from "@/components/ui/badge";
+    26→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    27→import { Button } from "@/components/ui/button";
+    28→import { Separator } from "@/components/ui/separator";
+    29→import { ScrollArea } from "@/components/ui/scroll-area";
+    30→import {
+    31→  type WorldCupData,
+    32→  type Match,
+    33→  type GroupData,
+    34→  type KnockoutRound,
+    35→} from "@/lib/types";
+    36→import {
+    37→  organizeGroups,
+    38→  organizeKnockout,
+    39→  formatDate,
+    40→  getMatchStatus,
+    41→  getCountryFlag,
+    42→} from "@/lib/data";
+    43→
+    44→// ─── Countdown Timer ────────────────────────────────────────────────────────
+    45→function CountdownTimer() {
+    46→  const targetDate = new Date("2026-06-11T18:00:00Z").getTime();
+    47→
+    48→  const [timeLeft, setTimeLeft] = useState({
+    49→    days: 0,
+    50→    hours: 0,
+    51→    minutes: 0,
+    52→    seconds: 0,
+    53→  });
+    54→
+    55→  useEffect(() => {
+    56→    const tick = () => {
+    57→      const now = Date.now();
+    58→      const diff = Math.max(0, targetDate - now);
+    59→      setTimeLeft({
+    60→        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+    61→        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+    62→        minutes: Math.floor((diff / (1000 * 60)) % 60),
+    63→        seconds: Math.floor((diff / 1000) % 60),
+    64→      });
+    65→    };
+    66→    tick();
+    67→    const interval = setInterval(tick, 1000);
+    68→    return () => clearInterval(interval);
+    69→  }, [targetDate]);
+    70→
+    71→  return (
+    72→    <div className="flex gap-3 sm:gap-4 justify-center">
+    73→      {[
+    74→        { label: "Days", value: timeLeft.days },
+    75→        { label: "Hours", value: timeLeft.hours },
+    76→        { label: "Minutes", value: timeLeft.minutes },
+    77→        { label: "Seconds", value: timeLeft.seconds },
+    78→      ].map((item) => (
+    79→        <div key={item.label} className="flex flex-col items-center">
+    80→          <div className="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2 sm:px-5 sm:py-3 min-w-[60px] sm:min-w-[80px] border border-white/20">
+    81→            <span className="text-2xl sm:text-4xl font-bold tabular-nums text-white">
+    82→              {String(item.value).padStart(2, "0")}
+    83→            </span>
+    84→          </div>
+    85→          <span className="text-[10px] sm:text-xs text-white/70 mt-1.5 uppercase tracking-wider font-medium">
+    86→            {item.label}
+    87→          </span>
+    88→        </div>
+    89→      ))}
+    90→    </div>
+    91→  );
+    92→}
+    93→
+    94→// ─── Match Card ─────────────────────────────────────────────────────────────
+    95→function MatchCard({ match }: { match: Match }) {
+    96→  const status = getMatchStatus(match);
+    97→  const [expanded, setExpanded] = useState(false);
+    98→
+    99→  const hasGoals =
+   100→    match.goals1 && match.goals2 && (match.goals1.length > 0 || match.goals2.length > 0);
+   101→
+   102→  return (
+   103→    <Card className="overflow-hidden transition-all hover:shadow-md border-border/50">
+   104→      <CardContent className="p-0">
+   105→        {/* Status bar */}
+   106→        <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b border-border/50">
+   107→          <div className="flex items-center gap-2">
+   108→            {status === "completed" && (
+   109→              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+   110→                FT
+   111→              </Badge>
+   112→            )}
+   113→            {status === "live" && (
+   114→              <Badge className="text-[10px] px-1.5 py-0 h-5 bg-red-500 text-white animate-pulse">
+   115→                LIVE
+   116→              </Badge>
+   117→            )}
+   118→            {status === "upcoming" && (
+   119→              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">
+   120→                Upcoming
+   121→              </Badge>
+   122→            )}
+   123→            <span className="text-xs text-muted-foreground">
+   124→              {match.round}
+   125→            </span>
+   126→          </div>
+   127→          {match.ground && (
+   128→            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+   129→              <MapPin className="h-3 w-3" />
+   130→              {match.ground}
+   131→            </div>
+   132→          )}
+   133→        </div>
+   134→
+   135→        {/* Teams and Score */}
+   136→        <div className="px-4 py-3">
+   137→          <div className="flex items-center justify-between">
+   138→            <div className="flex items-center gap-2 flex-1 min-w-0">
+   139→              <span className="text-lg">{getCountryFlag(match.team1)}</span>
+   140→              <span className="font-medium text-sm truncate">{match.team1}</span>
+   141→            </div>
+   142→            <div className="flex items-center gap-2 mx-4 shrink-0">
+   143→              {match.score?.ft ? (
+   144→                <div className="flex items-center gap-1.5">
+   145→                  <span className="text-lg font-bold tabular-nums">{match.score.ft[0]}</span>
+   146→                  <span className="text-muted-foreground text-sm">-</span>
+   147→                  <span className="text-lg font-bold tabular-nums">{match.score.ft[1]}</span>
+   148→                </div>
+   149→              ) : (
+   150→                <div className="flex items-center gap-1">
+   151→                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+   152→                  <span className="text-xs text-muted-foreground">
+   153→                    {match.time || "TBD"}
+   154→                  </span>
+   155→                </div>
+   156→              )}
+   157→            </div>
+   158→            <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+   159→              <span className="font-medium text-sm truncate text-right">{match.team2}</span>
+   160→              <span className="text-lg">{getCountryFlag(match.team2)}</span>
+   161→            </div>
+   162→          </div>
+   163→        </div>
+   164→
+   165→        {/* Expandable Goals */}
+   166→        {hasGoals && (
+   167→          <>
+   168→            <button
+   169→              onClick={() => setExpanded(!expanded)}
+   170→              className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border-t border-border/50"
+   171→            >
+   172→              {expanded ? (
+   173→                <ChevronUp className="h-3 w-3" />
+   174→              ) : (
+   175→                <ChevronDown className="h-3 w-3" />
+   176→              )}
+   177→              Goal Details
+   178→            </button>
+   179→            <AnimatePresence>
+   180→              {expanded && (
+   181→                <motion.div
+   182→                  initial={{ height: 0, opacity: 0 }}
+   183→                  animate={{ height: "auto", opacity: 1 }}
+   184→                  exit={{ height: 0, opacity: 0 }}
+   185→                  transition={{ duration: 0.2 }}
+   186→                  className="overflow-hidden"
+   187→                >
+   188→                  <div className="px-4 pb-3 pt-1 border-t border-border/50 space-y-1">
+   189→                    {match.goals1?.map((g, i) => (
+   190→                      <div key={`g1-${i}`} className="flex items-center gap-2 text-xs">
+   191→                        <span className="text-emerald-600 dark:text-emerald-400">⚽</span>
+   192→                        <span className="font-medium">{g.name}</span>
+   193→                        <span className="text-muted-foreground">{g.minute}&apos;</span>
+   194→                        {g.penalty && (
+   195→                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+   196→                            PEN
+   197→                          </Badge>
+   198→                        )}
+   199→                        {g.owngoal && (
+   200→                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+   201→                            OG
+   202→                          </Badge>
+   203→                        )}
+   204→                      </div>
+   205→                    ))}
+   206→                    {match.goals2?.map((g, i) => (
+   207→                      <div key={`g2-${i}`} className="flex items-center gap-2 text-xs">
+   208→                        <span className="text-emerald-600 dark:text-emerald-400">⚽</span>
+   209→                        <span className="font-medium">{g.name}</span>
+   210→                        <span className="text-muted-foreground">{g.minute}&apos;</span>
+   211→                        {g.penalty && (
+   212→                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+   213→                            PEN
+   214→                          </Badge>
+   215→                        )}
+   216→                        {g.owngoal && (
+   217→                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+   218→                            OG
+   219→                          </Badge>
+   220→                        )}
+   221→                      </div>
+   222→                    ))}
+   223→                  </div>
+   224→                </motion.div>
+   225→              )}
+   226→            </AnimatePresence>
+   227→          </>
+   228→        )}
+   229→
+   230→        {/* Date footer */}
+   231→        <div className="flex items-center gap-1.5 px-4 py-2 bg-muted/30 border-t border-border/50 text-xs text-muted-foreground">
+   232→          <Calendar className="h-3 w-3" />
+   233→          {formatDate(match.date)}
+   234→        </div>
+   235→      </CardContent>
+   236→    </Card>
+   237→  );
+   238→}
+   239→
+   240→// ─── Group Stage Table ──────────────────────────────────────────────────────
+   241→function GroupTable({ group }: { group: GroupData }) {
+   242→  const [showMatches, setShowMatches] = useState(false);
+   243→
+   244→  return (
+   245→    <Card className="overflow-hidden">
+   246→      <CardHeader className="pb-3">
+   247→        <div className="flex items-center justify-between">
+   248→          <CardTitle className="text-base flex items-center gap-2">
+   249→            <Trophy className="h-4 w-4 text-amber-500" />
+   250→            {group.name}
+   251→          </CardTitle>
+   252→          <Button
+   253→            variant="ghost"
+   254→            size="sm"
+   255→            className="h-7 text-xs gap-1"
+   256→            onClick={() => setShowMatches(!showMatches)}
+   257→          >
+   258→            {showMatches ? "Standings" : "Matches"}
+   259→            {showMatches ? (
+   260→              <ChevronUp className="h-3 w-3" />
+   261→            ) : (
+   262→              <ChevronDown className="h-3 w-3" />
+   263→            )}
+   264→          </Button>
+   265→        </div>
+   266→      </CardHeader>
+   267→      <CardContent className="pt-0">
+   268→        <AnimatePresence mode="wait">
+   269→          {!showMatches ? (
+   270→            <motion.div
+   271→              key="standings"
+   272→              initial={{ opacity: 0 }}
+   273→              animate={{ opacity: 1 }}
+   274→              exit={{ opacity: 0 }}
+   275→              transition={{ duration: 0.15 }}
+   276→            >
+   277→              <div className="overflow-x-auto">
+   278→                <table className="w-full text-sm">
+   279→                  <thead>
+   280→                    <tr className="border-b text-muted-foreground text-xs">
+   281→                      <th className="text-left py-2 pr-2 font-medium">#</th>
+   282→                      <th className="text-left py-2 pr-2 font-medium">Team</th>
+   283→                      <th className="text-center py-2 px-1 font-medium">P</th>
+   284→                      <th className="text-center py-2 px-1 font-medium">W</th>
+   285→                      <th className="text-center py-2 px-1 font-medium">D</th>
+   286→                      <th className="text-center py-2 px-1 font-medium">L</th>
+   287→                      <th className="text-center py-2 px-1 font-medium hidden sm:table-cell">GD</th>
+   288→                      <th className="text-center py-2 pl-1 font-medium">Pts</th>
+   289→                    </tr>
+   290→                  </thead>
+   291→                  <tbody>
+   292→                    {group.standings.map((team, idx) => (
+   293→                      <tr
+   294→                        key={team.team}
+   295→                        className={`border-b last:border-0 ${
+   296→                          idx < 2
+   297→                            ? "bg-emerald-50/50 dark:bg-emerald-950/20"
+   298→                            : ""
+   299→                        }`}
+   300→                      >
+   301→                        <td className="py-2 pr-2">
+   302→                          <span
+   303→                            className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
+   304→                              idx < 2
+   305→                                ? "bg-emerald-500 text-white"
+   306→                                : "bg-muted text-muted-foreground"
+   307→                            }`}
+   308→                          >
+   309→                            {idx + 1}
+   310→                          </span>
+   311→                        </td>
+   312→                        <td className="py-2 pr-2 font-medium flex items-center gap-1.5">
+   313→                          <span>{getCountryFlag(team.team)}</span>
+   314→                          <span className="truncate max-w-[100px] sm:max-w-none">{team.team}</span>
+   315→                        </td>
+   316→                        <td className="text-center py-2 px-1 tabular-nums text-muted-foreground">
+   317→                          {team.played}
+   318→                        </td>
+   319→                        <td className="text-center py-2 px-1 tabular-nums">
+   320→                          {team.won}
+   321→                        </td>
+   322→                        <td className="text-center py-2 px-1 tabular-nums text-muted-foreground">
+   323→                          {team.drawn}
+   324→                        </td>
+   325→                        <td className="text-center py-2 px-1 tabular-nums text-muted-foreground">
+   326→                          {team.lost}
+   327→                        </td>
+   328→                        <td className="text-center py-2 px-1 tabular-nums hidden sm:table-cell">
+   329→                          {team.goalDifference > 0 ? `+${team.goalDifference}` : team.goalDifference}
+   330→                        </td>
+   331→                        <td className="text-center py-2 pl-1 tabular-nums font-bold">
+   332→                          {team.points}
+   333→                        </td>
+   334→                      </tr>
+   335→                    ))}
+   336→                    {group.standings.length === 0 && (
+   337→                      <tr>
+   338→                        <td colSpan={8} className="py-4 text-center text-muted-foreground text-xs">
+   339→                          No matches played yet
+   340→                        </td>
+   341→                      </tr>
+   342→                    )}
+   343→                  </tbody>
+   344→                </table>
+   345→              </div>
+   346→              {group.standings.length > 0 && (
+   347→                <p className="text-[10px] text-muted-foreground mt-2">
+   348→                  <span className="inline-block w-2 h-2 rounded-sm bg-emerald-500 mr-1" />
+   349→                  Top 2 qualify for Round of 32
+   350→                </p>
+   351→              )}
+   352→            </motion.div>
+   353→          ) : (
+   354→            <motion.div
+   355→              key="matches"
+   356→              initial={{ opacity: 0 }}
+   357→              animate={{ opacity: 1 }}
+   358→              exit={{ opacity: 0 }}
+   359→              transition={{ duration: 0.15 }}
+   360→              className="space-y-2"
+   361→            >
+   362→              {group.matches.map((match, idx) => (
+   363→                <MatchCard key={idx} match={match} />
+   364→              ))}
+   365→            </motion.div>
+   366→          )}
+   367→        </AnimatePresence>
+   368→      </CardContent>
+   369→    </Card>
+   370→  );
+   371→}
+   372→
+   373→// ─── Knockout Round ─────────────────────────────────────────────────────────
+   374→function KnockoutRoundCard({ round }: { round: KnockoutRound }) {
+   375→  return (
+   376→    <div>
+   377→      <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
+   378→        {round.name === "Final" && <Trophy className="h-5 w-5 text-amber-500" />}
+   379→        {round.name === "Semi-final" && <Flame className="h-5 w-5 text-orange-500" />}
+   380→        {round.name === "Quarter-final" && <CircleDot className="h-5 w-5 text-emerald-500" />}
+   381→        {round.name === "Round of 32" && <Tv className="h-5 w-5 text-blue-500" />}
+   382→        {round.name === "Round of 16" && <Tv className="h-5 w-5 text-violet-500" />}
+   383→        {round.name === "Match for third place" && <Trophy className="h-5 w-5 text-amber-700" />}
+   384→        {round.name}
+   385→      </h3>
+   386→      <div className="grid gap-3 sm:grid-cols-2">
+   387→        {round.matches.map((match, idx) => (
+   388→          <MatchCard key={idx} match={match} />
+   389→        ))}
+   390→      </div>
+   391→    </div>
+   392→  );
+   393→}
+   394→
+   395→// ─── Schedule View ──────────────────────────────────────────────────────────
+   396→function ScheduleView({ matches }: { matches: Match[] }) {
+   397→  const [filter, setFilter] = useState<"all" | "completed" | "upcoming">("all");
+   398→
+   399→  const filtered = useMemo(() => {
+   400→    if (filter === "all") return matches;
+   401→    return matches.filter((m) => getMatchStatus(m) === filter);
+   402→  }, [matches, filter]);
+   403→
+   404→  // Group by date
+   405→  const grouped = useMemo(() => {
+   406→    const map = new Map<string, Match[]>();
+   407→    for (const m of filtered) {
+   408→      const key = m.date;
+   409→      if (!map.has(key)) map.set(key, []);
+   410→      map.get(key)!.push(m);
+   411→    }
+   412→    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+   413→  }, [filtered]);
+   414→
+   415→  return (
+   416→    <div>
+   417→      {/* Filter Buttons */}
+   418→      <div className="flex gap-2 mb-6 flex-wrap">
+   419→        {(
+   420→          [
+   421→            { key: "all", label: "All Matches" },
+   422→            { key: "completed", label: "Completed" },
+   423→            { key: "upcoming", label: "Upcoming" },
+   424→          ] as const
+   425→        ).map((f) => (
+   426→          <Button
+   427→            key={f.key}
+   428→            variant={filter === f.key ? "default" : "outline"}
+   429→            size="sm"
+   430→            onClick={() => setFilter(f.key)}
+   431→            className="text-xs"
+   432→          >
+   433→            {f.label}
+   434→            <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
+   435→              {f.key === "all"
+   436→                ? matches.length
+   437→                : matches.filter((m) => getMatchStatus(m) === f.key).length}
+   438→            </Badge>
+   439→          </Button>
+   440→        ))}
+   441→      </div>
+   442→
+   443→      {/* Grouped matches */}
+   444→      <div className="space-y-6">
+   445→        {grouped.map(([date, dateMatches]) => (
+   446→          <div key={date}>
+   447→            <div className="flex items-center gap-2 mb-3">
+   448→              <Calendar className="h-4 w-4 text-muted-foreground" />
+   449→              <h3 className="font-semibold text-sm">{formatDate(date)}</h3>
+   450→              <Separator className="flex-1" />
+   451→              <Badge variant="secondary" className="text-[10px]">
+   452→                {dateMatches.length} match{dateMatches.length > 1 ? "es" : ""}
+   453→              </Badge>
+   454→            </div>
+   455→            <div className="grid gap-3 sm:grid-cols-2">
+   456→              {dateMatches.map((match, idx) => (
+   457→                <MatchCard key={idx} match={match} />
+   458→              ))}
+   459→            </div>
+   460→          </div>
+   461→        ))}
+   462→      </div>
+   463→    </div>
+   464→  );
+   465→}
+   466→
+   467→// ─── Stats Banner ───────────────────────────────────────────────────────────
+   468→function StatsBanner({ data }: { data: WorldCupData }) {
+   469→  const completedMatches = data.matches.filter((m) => m.score?.ft).length;
+   470→  const upcomingMatches = data.matches.filter((m) => !m.score?.ft).length;
+   471→  const totalGoals = data.matches.reduce((acc, m) => {
+   472→    if (!m.score?.ft) return acc;
+   473→    return acc + m.score.ft[0] + m.score.ft[1];
+   474→  }, 0);
+   475→
+   476→  const stats = [
+   477→    { label: "Total Matches", value: data.matches.length, icon: CircleDot },
+   478→    { label: "Completed", value: completedMatches, icon: Tv },
+   479→    { label: "Upcoming", value: upcomingMatches, icon: Calendar },
+   480→    { label: "Goals Scored", value: totalGoals, icon: Trophy },
+   481→  ];
+   482→
+   483→  return (
+   484→    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   485→      {stats.map((stat) => (
+   486→        <Card key={stat.label} className="border-border/50">
+   487→          <CardContent className="p-4 flex items-center gap-3">
+   488→            <div className="p-2 rounded-lg bg-primary/10">
+   489→              <stat.icon className="h-4 w-4 text-primary" />
+   490→            </div>
+   491→            <div>
+   492→              <p className="text-xl font-bold tabular-nums">{stat.value}</p>
+   493→              <p className="text-[11px] text-muted-foreground">{stat.label}</p>
+   494→            </div>
+   495→          </CardContent>
+   496→        </Card>
+   497→      ))}
+   498→    </div>
+   499→  );
+   500→}
+   501→
+   502→// ─── Top Scorers ────────────────────────────────────────────────────────────
+   503→function TopScorers({ data }: { data: WorldCupData }) {
+   504→  const scorers = useMemo(() => {
+   505→    const goalMap = new Map<string, { name: string; goals: number; team: string }>();
+   506→
+   507→    for (const match of data.matches) {
+   508→      if (!match.score?.ft) continue;
+   509→
+   510→      const processGoals = (goals: Match["goals1"], teamSide: string) => {
+   511→        if (!goals) return;
+   512→        for (const g of goals) {
+   513→          if (g.owngoal) continue;
+   514→          const key = `${g.name}-${teamSide}`;
+   515→          if (!goalMap.has(key)) {
+   516→            goalMap.set(key, { name: g.name, goals: 0, team: teamSide });
+   517→          }
+   518→          goalMap.get(key)!.goals++;
+   519→        }
+   520→      };
+   521→
+   522→      processGoals(match.goals1, match.team1);
+   523→      processGoals(match.goals2, match.team2);
+   524→    }
+   525→
+   526→    return Array.from(goalMap.values())
+   527→      .sort((a, b) => b.goals - a.goals)
+   528→      .slice(0, 10);
+   529→  }, [data]);
+   530→
+   531→  if (scorers.length === 0) return null;
+   532→
+   533→  return (
+   534→    <Card className="border-border/50">
+   535→      <CardHeader className="pb-3">
+   536→        <CardTitle className="text-base flex items-center gap-2">
+   537→          <Flame className="h-4 w-4 text-orange-500" />
+   538→          Top Scorers
+   539→        </CardTitle>
+   540→      </CardHeader>
+   541→      <CardContent className="pt-0">
+   542→        <div className="space-y-2">
+   543→          {scorers.map((s, idx) => (
+   544→            <div
+   545→              key={s.name}
+   546→              className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors"
+   547→            >
+   548→              <div className="flex items-center gap-2.5">
+   549→                <span
+   550→                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+   551→                    idx === 0
+   552→                      ? "bg-amber-500 text-white"
+   553→                      : idx === 1
+   554→                      ? "bg-gray-400 text-white"
+   555→                      : idx === 2
+   556→                      ? "bg-amber-700 text-white"
+   557→                      : "bg-muted text-muted-foreground"
+   558→                  }`}
+   559→                >
+   560→                  {idx + 1}
+   561→                </span>
+   562→                <div>
+   563→                  <p className="text-sm font-medium">{s.name}</p>
+   564→                  <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+   565→                    {getCountryFlag(s.team)} {s.team}
+   566→                  </p>
+   567→                </div>
+   568→              </div>
+   569→              <div className="flex items-center gap-1.5">
+   570→                <span className="text-lg font-bold tabular-nums">{s.goals}</span>
+   571→                <span className="text-xs text-muted-foreground">goals</span>
+   572→              </div>
+   573→            </div>
+   574→          ))}
+   575→        </div>
+   576→      </CardContent>
+   577→    </Card>
+   578→  );
+   579→}
+   580→
+   581→// ─── Main Page ──────────────────────────────────────────────────────────────
+   582→export default function Home() {
+   583→  const [data, setData] = useState<WorldCupData | null>(null);
+   584→  const [loading, setLoading] = useState(true);
+   585→  const [error, setError] = useState<string | null>(null);
+   586→
+   587→  useEffect(() => {
+   588→    fetch("/api/worldcup")
+   589→      .then((res) => {
+   590→        if (!res.ok) throw new Error("Failed to fetch");
+   591→        return res.json();
+   592→      })
+   593→      .then((d: WorldCupData) => {
+   594→        setData(d);
+   595→        setLoading(false);
+   596→      })
+   597→      .catch((err) => {
+   598→        setError(err.message);
+   599→        setLoading(false);
+   600→      });
+   601→  }, []);
+   602→
+   603→  const groups = useMemo(() => (data ? organizeGroups(data.matches) : []), [data]);
+   604→  const knockouts = useMemo(() => (data ? organizeKnockout(data.matches) : []), [data]);
+   605→
+   606→  return (
+   607→    <div className="min-h-screen flex flex-col bg-background">
+   608→      {/* ─── Hero ─────────────────────────────────────────────────────────── */}
+   609→      <header className="relative overflow-hidden">
+   610→        {/* Background gradient */}
+   611→        <div className="absolute inset-0 bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900" />
+   612→        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.1),transparent_50%)]" />
+   613→        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(16,185,129,0.3),transparent_50%)]" />
+   614→
+   615→        {/* Decorative elements */}
+   616→        <div className="absolute top-10 left-10 w-20 h-20 rounded-full bg-white/5 blur-xl" />
+   617→        <div className="absolute bottom-10 right-10 w-32 h-32 rounded-full bg-emerald-400/10 blur-2xl" />
+   618→        <div className="absolute top-1/2 left-1/3 w-64 h-64 rounded-full bg-teal-500/5 blur-3xl" />
+   619→
+   620→        <div className="relative z-10 max-w-6xl mx-auto px-4 py-12 sm:py-20 text-center">
+   621→          <motion.div
+   622→            initial={{ opacity: 0, y: 20 }}
+   623→            animate={{ opacity: 1, y: 0 }}
+   624→            transition={{ duration: 0.6 }}
+   625→          >
+   626→            <Badge className="mb-4 bg-emerald-500/20 text-emerald-200 border-emerald-400/30 hover:bg-emerald-500/30">
+   627→              <CircleDot className="h-3 w-3 mr-1" />
+   628→              United States • Mexico • Canada
+   629→            </Badge>
+   630→
+   631→            <h1 className="text-4xl sm:text-6xl font-extrabold text-white mb-2 tracking-tight">
+   632→              FIFA World Cup
+   633→            </h1>
+   634→            <div className="flex items-center justify-center gap-3 mb-6">
+   635→              <span className="text-5xl sm:text-7xl font-black text-emerald-300">2026</span>
+   636→            </div>
+   637→
+   638→            <p className="text-emerald-200/80 text-sm sm:text-base max-w-xl mx-auto mb-8">
+   639→              Follow every match, track group standings, and watch the knockout
+   640→              bracket unfold. 48 teams, 104 matches, 1 champion.
+   641→            </p>
+   642→
+   643→            <CountdownTimer />
+   644→
+   645→            <div className="flex items-center justify-center gap-2 mt-6 text-emerald-300/60 text-xs">
+   646→              <ArrowRight className="h-3 w-3" />
+   647→              Tournament kicks off June 11, 2026
+   648→            </div>
+   649→          </motion.div>
+   650→        </div>
+   651→      </header>
+   652→
+   653→      {/* ─── Main Content ────────────────────────────────────────────────── */}
+   654→      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8">
+   655→        {loading ? (
+   656→          <div className="flex flex-col items-center justify-center py-20 gap-3">
+   657→            <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+   658→            <p className="text-muted-foreground text-sm">Loading World Cup data...</p>
+   659→          </div>
+   660→        ) : error ? (
+   661→          <div className="text-center py-20">
+   662→            <p className="text-destructive text-sm">{error}</p>
+   663→          </div>
+   664→        ) : data ? (
+   665→          <motion.div
+   666→            initial={{ opacity: 0 }}
+   667→            animate={{ opacity: 1 }}
+   668→            transition={{ duration: 0.4, delay: 0.2 }}
+   669→            className="space-y-8"
+   670→          >
+   671→            {/* Stats */}
+   672→            <StatsBanner data={data} />
+   673→
+   674→            {/* Top Scorers + Quick Info */}
+   675→            <div className="grid gap-6 lg:grid-cols-3">
+   676→              <div className="lg:col-span-2">
+   677→                <Card className="border-border/50 h-full">
+   678→                  <CardHeader className="pb-3">
+   679→                    <CardTitle className="text-base flex items-center gap-2">
+   680→                      <Tv className="h-4 w-4 text-emerald-500" />
+   681→                      Live Stream Schedule
+   682→                    </CardTitle>
+   683→                    <CardDescription>
+   684→                      Watch every match live as it happens
+   685→                    </CardDescription>
+   686→                  </CardHeader>
+   687→                  <CardContent className="pt-0">
+   688→                    <div className="space-y-3">
+   689→                      {data.matches
+   690→                        .filter((m) => !m.score?.ft)
+   691→                        .slice(0, 5)
+   692→                        .map((match, idx) => (
+   693→                          <div
+   694→                            key={idx}
+   695→                            className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/50 transition-colors"
+   696→                          >
+   697→                            <div className="flex items-center gap-2 text-sm">
+   698→                              <span>{getCountryFlag(match.team1)}</span>
+   699→                              <span className="font-medium">{match.team1}</span>
+   700→                              <span className="text-muted-foreground">vs</span>
+   701→                              <span className="font-medium">{match.team2}</span>
+   702→                              <span>{getCountryFlag(match.team2)}</span>
+   703→                            </div>
+   704→                            <div className="flex items-center gap-2">
+   705→                              {match.group && (
+   706→                                <Badge variant="outline" className="text-[10px] px-1.5">
+   707→                                  {match.group}
+   708→                                </Badge>
+   709→                              )}
+   710→                              <Badge variant="secondary" className="text-[10px] gap-1">
+   711→                                <Calendar className="h-2.5 w-2.5" />
+   712→                                {formatDate(match.date)}
+   713→                              </Badge>
+   714→                            </div>
+   715→                          </div>
+   716→                        ))}
+   717→                      {data.matches.filter((m) => !m.score?.ft).length === 0 && (
+   718→                        <p className="text-sm text-muted-foreground text-center py-4">
+   719→                          Tournament hasn&apos;t started yet. Stay tuned!
+   720→                        </p>
+   721→                      )}
+   722→                    </div>
+   723→                  </CardContent>
+   724→                </Card>
+   725→              </div>
+   726→              <TopScorers data={data} />
+   727→            </div>
+   728→
+   729→            {/* Tabs */}
+   730→            <Tabs defaultValue="groups" className="w-full">
+   731→              <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
+   732→                <TabsTrigger value="groups" className="gap-1.5">
+   733→                  <Trophy className="h-3.5 w-3.5" />
+   734→                  <span className="hidden sm:inline">Group</span> Stage
+   735→                </TabsTrigger>
+   736→                <TabsTrigger value="schedule" className="gap-1.5">
+   737→                  <Calendar className="h-3.5 w-3.5" />
+   738→                  Schedule
+   739→                </TabsTrigger>
+   740→                <TabsTrigger value="knockout" className="gap-1.5">
+   741→                  <Flame className="h-3.5 w-3.5" />
+   742→                  Knockout
+   743→                </TabsTrigger>
+   744→              </TabsList>
+   745→
+   746→              {/* Group Stage */}
+   747→              <TabsContent value="groups" className="mt-6">
+   748→                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   749→                  {groups.map((group) => (
+   750→                    <GroupTable key={group.name} group={group} />
+   751→                  ))}
+   752→                </div>
+   753→              </TabsContent>
+   754→
+   755→              {/* Schedule */}
+   756→              <TabsContent value="schedule" className="mt-6">
+   757→                <ScheduleView matches={data.matches} />
+   758→              </TabsContent>
+   759→
+   760→              {/* Knockout */}
+   761→              <TabsContent value="knockout" className="mt-6">
+   762→                <div className="space-y-10">
+   763→                  {knockouts.map((round) => (
+   764→                    <KnockoutRoundCard key={round.name} round={round} />
+   765→                  ))}
+   766→                </div>
+   767→              </TabsContent>
+   768→            </Tabs>
+   769→          </motion.div>
+   770→        ) : null}
+   771→      </main>
+   772→
+   773→      {/* ─── Footer ──────────────────────────────────────────────────────── */}
+   774→      <footer className="border-t bg-muted/30 mt-auto">
+   775→        <div className="max-w-6xl mx-auto px-4 py-6">
+   776→          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+   777→            <div className="flex items-center gap-2">
+   778→              <CircleDot className="h-4 w-4 text-emerald-500" />
+   779→              <span className="text-sm font-semibold">FIFA World Cup 2026</span>
+   780→            </div>
+   781→            <p className="text-xs text-muted-foreground text-center">
+   782→              Data sourced from{" "}
+   783→              <a
+   784→                href="https://github.com/openfootball/worldcup.json"
+   785→                target="_blank"
+   786→                rel="noopener noreferrer"
+   787→                className="underline hover:text-foreground transition-colors"
+   788→              >
+   789→                openfootball
+   790→              </a>
+   791→              . Not affiliated with FIFA. For informational purposes only.
+   792→            </p>
+   793→            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+   794→              <span>🇺🇸 🇲🇽 🇨🇦</span>
+   795→            </div>
+   796→          </div>
+   797→        </div>
+   798→      </footer>
+   799→    </div>
+   800→  );
+   801→}
+   802→
