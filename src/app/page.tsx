@@ -739,6 +739,119 @@ function ScheduleView({
   );
 }
 
+// ─── Live Stream Schedule (next 2 matchdays) ────────────────────────────────
+function LiveStreamSchedule({
+  matches,
+  onWatchLive,
+}: {
+  matches: Match[];
+  onWatchLive: (match: Match) => void;
+}) {
+  // Get next 2 upcoming dates
+  const upcomingByDate = useMemo(() => {
+    const upcoming = matches.filter((m) => !m.score?.ft);
+    const dateSet = new Set<string>();
+    for (const m of upcoming) {
+      dateSet.add(m.date);
+    }
+    const sortedDates = Array.from(dateSet).sort();
+    const next2 = sortedDates.slice(0, 2);
+
+    return next2.map((date) => ({
+      date,
+      matches: upcoming.filter((m) => m.date === date),
+    }));
+  }, [matches]);
+
+  if (upcomingByDate.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Tv className="h-3.5 w-3.5 text-emerald-400" />
+            Live Stream Schedule
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <p className="text-sm text-muted-foreground text-center py-6">
+            Tournament hasn&apos;t started yet. Stay tuned!
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-3">
+      <div className="lg:col-span-2 space-y-4">
+        <div className="flex items-center gap-2">
+          <Tv className="h-4 w-4 text-emerald-400" />
+          <h2 className="text-sm font-semibold">Live Stream Schedule</h2>
+          <Badge variant="secondary" className="text-[10px]">Next 2 matchdays</Badge>
+        </div>
+        {upcomingByDate.map(({ date, matches: dateMatches }) => (
+          <Card key={date}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-emerald-500/10">
+                  <Calendar className="h-3.5 w-3.5 text-emerald-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-sm">{formatDate(date)}</CardTitle>
+                  <CardDescription className="text-[11px]">
+                    {dateMatches.length} match{dateMatches.length > 1 ? "es" : ""} scheduled
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="space-y-2">
+                {dateMatches.map((match, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors group"
+                  >
+                    <div className="flex items-center gap-2 text-sm min-w-0">
+                      <span className="text-base">{getCountryFlag(match.team1)}</span>
+                      <span className="font-medium truncate">{match.team1}</span>
+                      <span className="text-muted-foreground shrink-0">vs</span>
+                      <span className="font-medium truncate">{match.team2}</span>
+                      <span className="text-base">{getCountryFlag(match.team2)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {match.time && (
+                        <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 h-5">
+                          <Clock className="h-2.5 w-2.5" />
+                          {match.time}
+                        </Badge>
+                      )}
+                      {match.group && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 hidden sm:flex">
+                          {match.group}
+                        </Badge>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-[10px] gap-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 px-2 opacity-60 group-hover:opacity-100 transition-opacity"
+                        onClick={() => onWatchLive(match)}
+                      >
+                        <Play className="h-3 w-3 fill-emerald-400" />
+                        Watch
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <TopScorers data={{ matches } as WorldCupData} />
+    </div>
+  );
+}
+
 // ─── Stats Banner ───────────────────────────────────────────────────────────
 function StatsBanner({ data }: { data: WorldCupData }) {
   const completedMatches = data.matches.filter((m) => m.score?.ft).length;
@@ -1219,69 +1332,11 @@ export default function Home() {
               {/* Stats */}
               <StatsBanner data={data} />
 
-              {/* Top Scorers + Quick Info */}
-              <div className="grid gap-6 lg:grid-cols-3">
-                <div className="lg:col-span-2">
-                  <Card className="h-full">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <Tv className="h-3.5 w-3.5 text-emerald-400" />
-                        Live Stream Schedule
-                      </CardTitle>
-                      <CardDescription>
-                        Click Watch to open the live stream player
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="space-y-2">
-                        {data.matches
-                          .filter((m) => !m.score?.ft)
-                          .slice(0, 5)
-                          .map((match, idx) => (
-                            <div
-                              key={idx}
-                              className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors group"
-                            >
-                              <div className="flex items-center gap-2 text-sm">
-                                <span>{getCountryFlag(match.team1)}</span>
-                                <span className="font-medium">{match.team1}</span>
-                                <span className="text-muted-foreground">vs</span>
-                                <span className="font-medium">{match.team2}</span>
-                                <span>{getCountryFlag(match.team2)}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {match.group && (
-                                  <Badge variant="outline" className="text-[10px] px-1.5">
-                                    {match.group}
-                                  </Badge>
-                                )}
-                                <Badge variant="secondary" className="text-[10px] gap-1">
-                                  <Calendar className="h-2.5 w-2.5" />
-                                  {formatDate(match.date)}
-                                </Badge>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 text-[10px] gap-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 px-2 opacity-60 group-hover:opacity-100 transition-opacity"
-                                  onClick={() => handleWatchLive(match)}
-                                >
-                                  <Play className="h-3 w-3 fill-emerald-400" />
-                                  Watch
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        {data.matches.filter((m) => !m.score?.ft).length === 0 && (
-                          <p className="text-sm text-muted-foreground text-center py-4">
-                            Tournament hasn&apos;t started yet. Stay tuned!
-                          </p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-                <TopScorers data={data} />
-              </div>
+              {/* Live Stream Schedule — next 2 matchdays */}
+              <LiveStreamSchedule
+                matches={data.matches}
+                onWatchLive={handleWatchLive}
+              />
 
               {/* Tabs */}
               <Tabs defaultValue="groups" className="w-full">
