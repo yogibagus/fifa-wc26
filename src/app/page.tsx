@@ -784,7 +784,7 @@ function LiveStreamSchedule({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
+    <div className="space-y-4 lg:space-y-0 lg:grid lg:gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2 space-y-4">
         <div className="flex items-center gap-2">
           <Tv className="h-4 w-4 text-emerald-400" />
@@ -927,38 +927,37 @@ function TopScorers({ data }: { data: WorldCupData }) {
         <h2 className="text-sm font-semibold">Top Scorers</h2>
         <Badge variant="secondary" className="text-[10px]">{scorers.length} players</Badge>
       </div>
-      <Card className="h-full">
-        <CardContent className="p-2.5 sm:p-4">
-          <div className="space-y-1">
+      <Card>
+        <CardContent className="p-2 sm:p-3">
+          {/* Grid on mobile, vertical list on desktop */}
+          <div className="grid grid-cols-2 lg:grid-cols-1 gap-1.5 sm:gap-1">
             {scorers.map((s, idx) => (
               <div
                 key={s.name}
-                className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors"
+                className="flex items-center gap-1.5 sm:gap-2.5 py-1 sm:py-1.5 px-1.5 sm:px-2 rounded-md hover:bg-muted/50 transition-colors"
               >
-                <div className="flex items-center gap-2 sm:gap-2.5">
-                  <span
-                    className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[9px] sm:text-[10px] font-bold ${
-                      idx === 0
-                        ? "bg-amber-500/20 text-amber-400"
-                        : idx === 1
-                        ? "bg-gray-400/20 text-gray-300"
-                        : idx === 2
-                        ? "bg-amber-700/20 text-amber-600"
-                        : "bg-muted/50 text-muted-foreground"
-                    }`}
-                  >
-                    {idx + 1}
-                  </span>
-                  <div>
-                    <p className="text-xs sm:text-sm font-medium">{s.name}</p>
-                    <p className="text-[10px] sm:text-[11px] text-muted-foreground flex items-center gap-1">
-                      {getCountryFlag(s.team)} {s.team}
-                    </p>
-                  </div>
+                <span
+                  className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[9px] sm:text-[10px] font-bold shrink-0 ${
+                    idx === 0
+                      ? "bg-amber-500/20 text-amber-400"
+                      : idx === 1
+                      ? "bg-gray-400/20 text-gray-300"
+                      : idx === 2
+                      ? "bg-amber-700/20 text-amber-600"
+                      : "bg-muted/50 text-muted-foreground"
+                  }`}
+                >
+                  {idx + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] sm:text-sm font-medium truncate">{s.name}</p>
+                  <p className="text-[9px] sm:text-[11px] text-muted-foreground truncate">
+                    {getCountryFlag(s.team)} {s.team}
+                  </p>
                 </div>
-                <div className="flex items-center gap-1 sm:gap-1.5">
-                  <span className="text-base sm:text-lg font-bold tabular-nums text-emerald-400">{s.goals}</span>
-                  <span className="text-[10px] sm:text-xs text-muted-foreground">goals</span>
+                <div className="flex items-center gap-0.5 sm:gap-1.5 shrink-0">
+                  <span className="text-sm sm:text-lg font-bold tabular-nums text-emerald-400">{s.goals}</span>
+                  <span className="text-[9px] sm:text-xs text-muted-foreground hidden sm:inline">goals</span>
                 </div>
               </div>
             ))}
