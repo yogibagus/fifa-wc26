@@ -68,21 +68,42 @@ Or run migrations post-deployment in Vercel's environment.
 - Visit your deployed URL
 - Test API endpoints at `/api/*`
 
-## Files Created for Deployment
+## Configuration Updates (Fixed for Vercel)
+
+✅ **Removed standalone mode** - Using standard Next.js build for maximum Vercel compatibility
+✅ **Simplified build script** - Now just `next build` 
+✅ **Updated start command** - Using `next start` with proper port handling
+✅ **Removed custom output directory** - Using Vercel's default `.next` configuration
+
+**Files Ready for Deployment:**
+- ✅ `next.config.ts` - Simplified to standard Next.js configuration
+- ✅ `vercel.json` - Streamlined Vercel configuration 
+- ✅ `package.json` - Build and start scripts updated
 - ✅ `.vercelignore` - Specifies files to exclude
-- ✅ `vercel.json` - Vercel configuration
 - ✅ `.env.example` - Template for environment variables
-- ✅ Updated `package.json` - Node.js compatible start script
+
+## Build Configuration
+
+The project now uses **standard Next.js build**:
+- **Build Command**: `npm run build` (runs `next build`)
+- **Start Command**: `npm start` (runs `next start`)  
+- **Output Directory**: `.next` (default, handled by Vercel)
+
+This approach is more reliable than standalone mode and has better Vercel support.
 
 ## Troubleshooting
 
-**Build fails**: Check Next.js build logs in Vercel dashboard
+**Build fails**: 
+- Check Next.js build logs in Vercel dashboard
+- Verify all environment variables are set correctly
+- Ensure database connection string is accessible
+
 **Database errors**: Verify `DATABASE_URL` is correct and accessible
-**TypeScript errors**: Already configured to skip with `ignoreBuildErrors: true`
+**Port not set**: Already configured to use `${PORT:-3000}` for Vercel compatibility
 
 ## Next Steps
-1. Choose a database provider
-2. Update `.env` with your database connection
-3. Test locally: `npm run build && npm run start`
+1. Choose a database provider (Turso, PostgreSQL, or PlanetScale)
+2. Update `.env` locally with your database connection
+3. Test locally: `npm run build && npm start`
 4. Push to Git
-5. Deploy via Vercel
+5. Deploy via Vercel (with environment variables set)
