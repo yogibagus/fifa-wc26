@@ -50,12 +50,6 @@ import {
 // ─── Stream Channels ────────────────────────────────────────────────────────
 const STREAM_CHANNELS = [
   {
-    id: "tv360",
-    name: "TV360 Sports",
-    quality: "HD 1080p",
-    url: "https://ec05-pop1-hlc.tv360.vn/bpk-token/gv54oov24drdv4cb6e6di66hhi2xxrz2/bpk-tv/155/output/155-audio_198800_eng_iv_5=196800-video_iv_5=3417600.m3u8",
-  },
-  {
     id: "rtbgo",
     name: "RTB Go",
     quality: "HD 720p",
