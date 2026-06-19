@@ -76,8 +76,57 @@ const STREAM_CHANNELS = [
   },
 ];
 
+// ─── Stream Error Diagnostics ───────────────────────────────────────────────
+// Maps an hls.js fatal network error to a specific, actionable message.
+// `retryable` tells the caller whether `hls.startLoad()` is worth attempting
+// (only true for transient 5xx — CORS/geo-block/dead URLs won't self-heal).
+function describeHlsNetworkError(data: {
+  response?: { code?: number; text?: string };
+  details?: string;
+}): { message: string; retryable: boolean } {
+  const code = data.response?.code;
+  // code 0 / undefined => request never completed (CORS, DNS, offline, TLS)
+  if (code === undefined || code === 0) {
+    return {
+      message:
+        "Stream blocked — the source rejected the request (CORS or connection blocked).",
+      retryable: false,
+    };
+  }
+  if (code === 403 || code === 451) {
+    return {
+      message: `Stream geo-blocked (HTTP ${code}). This channel isn't licensed for your region.`,
+      retryable: false,
+    };
+  }
+  if (code === 404 || code === 410) {
+    return {
+      message: `Stream offline (HTTP ${code}). The source may have moved or expired.`,
+      retryable: false,
+    };
+  }
+  if (code >= 500) {
+    return {
+      message: `Source server error (HTTP ${code}). Retrying…`,
+      retryable: true,
+    };
+  }
+  return {
+    message: `Network error (HTTP ${code}). Try another channel.`,
+    retryable: false,
+  };
+}
+
 // ─── HLS Video Player ───────────────────────────────────────────────────────
-function HLSPlayer({ url, channelId }: { url: string; channelId: string }) {
+function HLSPlayer({
+  url,
+  channelId,
+  onNetworkError,
+}: {
+  url: string;
+  channelId: string;
+  onNetworkError?: (channelId: string) => void;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -136,21 +185,32 @@ function HLSPlayer({ url, channelId }: { url: string; channelId: string }) {
       });
 
       hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              setError("Network error — stream may be unavailable in your region");
+        if (!data.fatal) return;
+
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR: {
+            const { message, retryable } = describeHlsNetworkError(data);
+            setError(message);
+            if (retryable) {
+              // Transient 5xx — worth a single retry.
               hls.startLoad();
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              setError("Media error — attempting recovery...");
-              hls.recoverMediaError();
-              break;
-            default:
-              setError("Stream error — please try another channel");
+            } else {
+              // CORS / geo-block / dead URL — won't self-heal. Notify parent
+              // so it can auto-rotate to the next channel.
               hls.destroy();
-              break;
+              onNetworkError?.(channelId);
+            }
+            break;
           }
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            setError("Media error — attempting recovery...");
+            hls.recoverMediaError();
+            break;
+          default:
+            setError("Stream error — please try another channel");
+            hls.destroy();
+            onNetworkError?.(channelId);
+            break;
         }
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -993,6 +1053,35 @@ function MatchDetailView({
   onBack: () => void;
 }) {
   const [selectedChannel, setSelectedChannel] = useState(STREAM_CHANNELS[0]);
+  // Track channel IDs that have failed (CORS / geo-block / offline) so the UI
+  // can grey them out and we can auto-rotate to a healthy one.
+  const [failedChannels, setFailedChannels] = useState<Set<string>>(new Set());
+
+  // Auto-rotate to the next healthy channel when the current one fails.
+  const handleChannelError = useCallback(
+    (channelId: string) => {
+      setFailedChannels((prev) => {
+        const next = new Set(prev);
+        next.add(channelId);
+        // If the channel that failed is the currently-selected one, jump to
+        // the next channel that hasn't failed yet (if any remain).
+        if (channelId === selectedChannel.id) {
+          const fallback = STREAM_CHANNELS.find((c) => !next.has(c.id));
+          if (fallback) {
+            setSelectedChannel(fallback);
+          }
+        }
+        return next;
+      });
+    },
+    [selectedChannel.id]
+  );
+
+  // Reset failure state when switching to a different match.
+  useEffect(() => {
+    setFailedChannels(new Set());
+    setSelectedChannel(STREAM_CHANNELS[0]);
+  }, [match]);
 
   return (
     <motion.div
@@ -1075,6 +1164,7 @@ function MatchDetailView({
       <HLSPlayer
         url={selectedChannel.url}
         channelId={selectedChannel.id}
+        onNetworkError={handleChannelError}
       />
 
       {/* Channel Selection */}
@@ -1090,55 +1180,67 @@ function MatchDetailView({
         </CardHeader>
         <CardContent className="pt-0">
           <div className="grid gap-2 sm:grid-cols-2">
-            {STREAM_CHANNELS.map((channel) => (
-              <button
-                key={channel.id}
-                onClick={() => setSelectedChannel(channel)}
-                className={`flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${
-                  selectedChannel.id === channel.id
-                    ? "border-emerald-500/50 bg-emerald-500/10 ring-1 ring-emerald-500/30"
-                    : "border-border/50 hover:bg-muted/30 hover:border-border"
-                }`}
-              >
-                <div
-                  className={`p-2 rounded-lg ${
-                    selectedChannel.id === channel.id
-                      ? "bg-emerald-500/20"
-                      : "bg-muted/50"
+            {STREAM_CHANNELS.map((channel) => {
+              const isFailed = failedChannels.has(channel.id);
+              const isSelected = selectedChannel.id === channel.id;
+              return (
+                <button
+                  key={channel.id}
+                  onClick={() => setSelectedChannel(channel)}
+                  className={`flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${
+                    isSelected
+                      ? "border-emerald-500/50 bg-emerald-500/10 ring-1 ring-emerald-500/30"
+                      : isFailed
+                      ? "border-red-500/20 bg-red-500/5 opacity-60 hover:opacity-80"
+                      : "border-border/50 hover:bg-muted/30 hover:border-border"
                   }`}
                 >
-                  <Tv
-                    className={`h-4 w-4 ${
-                      selectedChannel.id === channel.id
-                        ? "text-emerald-400"
-                        : "text-muted-foreground"
+                  <div
+                    className={`p-2 rounded-lg ${
+                      isSelected
+                        ? "bg-emerald-500/20"
+                        : isFailed
+                        ? "bg-red-500/10"
+                        : "bg-muted/50"
                     }`}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">{channel.name}</p>
-                    {selectedChannel.id === channel.id && (
-                      <div className="flex items-center gap-1">
-                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="text-[10px] text-emerald-400 font-medium">Playing</span>
-                      </div>
-                    )}
+                  >
+                    <Tv
+                      className={`h-4 w-4 ${
+                        isSelected
+                          ? "text-emerald-400"
+                          : isFailed
+                          ? "text-red-400"
+                          : "text-muted-foreground"
+                      }`}
+                    />
                   </div>
-                  <p className="text-xs text-muted-foreground">{channel.quality}</p>
-                </div>
-                <Badge
-                  variant={selectedChannel.id === channel.id ? "default" : "outline"}
-                  className={`text-[10px] shrink-0 ${
-                    selectedChannel.id === channel.id
-                      ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/30"
-                      : ""
-                  }`}
-                >
-                  {selectedChannel.id === channel.id ? "Active" : "Switch"}
-                </Badge>
-              </button>
-            ))}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{channel.name}</p>
+                      {isSelected && !isFailed && (
+                        <div className="flex items-center gap-1">
+                          <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span className="text-[10px] text-emerald-400 font-medium">Playing</span>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{channel.quality}</p>
+                  </div>
+                  <Badge
+                    variant={isSelected ? "default" : "outline"}
+                    className={`text-[10px] shrink-0 ${
+                      isSelected
+                        ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/30"
+                        : isFailed
+                        ? "bg-red-500/10 text-red-400 hover:bg-red-500/10 border-red-500/30"
+                        : ""
+                    }`}
+                  >
+                    {isFailed ? "Unavailable" : isSelected ? "Active" : "Switch"}
+                  </Badge>
+                </button>
+              );
+            })}
           </div>
         </CardContent>
       </Card>

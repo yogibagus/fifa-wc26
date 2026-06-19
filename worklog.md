@@ -33,3 +33,19 @@ Stage Summary:
 - Responsive design (mobile + desktop)
 - API caching for performance
 - Clean lint, no errors
+
+---
+
+## 2026-06-19 — Stream reliability & error diagnostics
+
+**Problem:** Users saw a generic "Network error — stream may be unavailable in your region" message and got stuck on dead channels. The user asked whether this was caused by the Vercel server region.
+
+**Diagnosis:** Vercel region is irrelevant here — `hls.js` loads streams directly in the viewer's browser from third-party CDNs (CloudFront, FPT Play). The real causes are (a) CORS rejection by the provider, (b) geo-blocking based on the viewer's IP, (c) dead/expired URLs, or (d) transient 5xx.
+
+**Changes** (`src/app/page.tsx`):
+- Added `describeHlsNetworkError()` — maps hls.js error data to specific messages and a `retryable` flag based on HTTP status (0 = CORS/blocked, 403/451 = geo-block, 404/410 = offline, 5xx = retry).
+- Updated `HLSPlayer` error handler to use the new diagnostics, only retry (`startLoad`) for transient 5xx, and call a new `onNetworkError(channelId)` callback for non-retryable failures.
+- Added auto-fallback in `MatchDetailView`: tracks failed channels in a `Set`, auto-rotates to the next healthy channel when the selected one fails, and resets state per-match.
+- Channel selector now visually marks failed channels (red, "Unavailable" badge, greyed out) so users can see which sources are dead at a glance.
+
+**Result:** Clear, specific error messages + automatic failover to working channels instead of users being stuck on a dead stream. Build passes (`next build` ✓).
