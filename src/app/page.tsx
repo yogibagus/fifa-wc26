@@ -21,6 +21,8 @@ import {
   VolumeX,
   Maximize,
   Minimize,
+  Settings,
+  Check,
 } from "lucide-react";
 import {
   Card,
@@ -150,6 +152,22 @@ function HLSPlayer({
   const [error, setError] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(true);
 
+  // ─── Quality / Resolution Selection ──────────────────────────────────────
+  // `levels` are populated from hls.js once the manifest is parsed.
+  // `currentLevel`: -1 = Auto (ABR), otherwise the index of the level in hls.levels.
+  // We persist the user's choice to localStorage so it survives channel switches.
+  const [levels, setLevels] = useState<{ index: number; height: number; bitrate: number }[]>([]);
+  const [currentLevel, setCurrentLevel] = useState<number>(() => {
+    if (typeof window === "undefined") return -1;
+    const saved = window.localStorage.getItem("fifa-quality-level");
+    return saved !== null ? Number(saved) : -1;
+  });
+  const [showQualityMenu, setShowQualityMenu] = useState(false);
+  // Height of the level hls.js is currently playing (for the "Auto" label).
+  const [activeHeight, setActiveHeight] = useState<number | undefined>(undefined);
+
+  const QUALITY_STORAGE_KEY = "fifa-quality-level";
+
   // Auto-hide controls after 3s when playing
   useEffect(() => {
     if (isPlaying) {
@@ -170,6 +188,10 @@ function HLSPlayer({
     setIsLoading(true);
     setError(null);
     setIsPlaying(false);
+    // Reset levels for the new channel; menu closes too.
+    setLevels([]);
+    setShowQualityMenu(false);
+    setActiveHeight(undefined);
   }
 
   // Initialize HLS
@@ -193,8 +215,44 @@ function HLSPlayer({
       hls.loadSource(url);
       hls.attachMedia(video);
 
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      hls.on(Hls.Events.MANIFEST_PARSED, (_e, data) => {
         setIsLoading(false);
+        // Build the quality options from the parsed manifest.
+        const parsedLevels = (data.levels || hls.levels || [])
+          .map((level, index) => ({
+            index,
+            height: level.height || 0,
+            bitrate: level.bitrate || 0,
+          }))
+          .filter((l) => l.height > 0)
+          // Sort descending by resolution (highest quality first).
+          .sort((a, b) => b.height - a.height);
+        setLevels(parsedLevels);
+
+        // Apply the saved preference if it's valid for this manifest.
+        // NOTE: read directly from localStorage (not the `currentLevel` state)
+        // so this effect doesn't depend on it — avoiding a stale closure and
+        // an exhaustive-deps warning.
+        let saved = -1;
+        try {
+          const raw = window.localStorage.getItem(QUALITY_STORAGE_KEY);
+          saved = raw !== null ? Number(raw) : -1;
+        } catch {
+          saved = -1;
+        }
+        if (!Number.isNaN(saved) && saved !== -1 && saved >= 0 && saved < (hls.levels?.length ?? 0)) {
+          hls.currentLevel = saved;
+          setCurrentLevel(saved);
+          setActiveHeight(hls.levels?.[saved]?.height);
+        } else {
+          hls.currentLevel = -1;
+          setCurrentLevel(-1);
+        }
+      });
+
+      // Keep the UI in sync when hls.js switches levels (manual or ABR).
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_e, data) => {
+        setActiveHeight(hls.levels?.[data.level]?.height);
       });
 
       hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -291,6 +349,38 @@ function HLSPlayer({
       // fullscreen not supported
     }
   }, []);
+
+  // Switch to a specific quality level. `level = -1` resumes adaptive bitrate.
+  const changeLevel = useCallback((level: number) => {
+    const hls = hlsRef.current;
+    if (hls) {
+      hls.currentLevel = level;
+      // When set to a fixed level, the active height is known immediately.
+      // For Auto (-1), LEVEL_SWITCHED will update it as ABR adapts.
+      setActiveHeight(level === -1 ? undefined : hls.levels?.[level]?.height);
+    }
+    setCurrentLevel(level);
+    try {
+      window.localStorage.setItem(QUALITY_STORAGE_KEY, String(level));
+    } catch {
+      // localStorage may be unavailable (private mode); ignore.
+    }
+    setShowQualityMenu(false);
+  }, []);
+
+  // Close the quality menu when clicking elsewhere.
+  useEffect(() => {
+    if (!showQualityMenu) return;
+    const handle = () => setShowQualityMenu(false);
+    // Defer so the opening click doesn't immediately close it.
+    window.requestAnimationFrame(() => {
+      window.addEventListener("click", handle);
+    });
+    return () => window.removeEventListener("click", handle);
+  }, [showQualityMenu]);
+
+  // Human-readable label for a level height (e.g. 1080 -> "1080p").
+  const levelLabel = (height: number) => `${height}p`;
 
   return (
     <div
@@ -390,6 +480,67 @@ function HLSPlayer({
               <span className="text-[10px] sm:text-xs text-white/80 font-medium">LIVE</span>
             </div>
           </div>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="relative">
+            {levels.length > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowQualityMenu((v) => !v);
+                  revealControls();
+                }}
+                className="p-2 rounded-lg hover:bg-white/10 active:bg-white/20 transition-colors flex items-center gap-1"
+                aria-label="Streaming quality"
+                aria-haspopup="menu"
+                aria-expanded={showQualityMenu}
+              >
+                <Settings className="h-5 w-5 text-white" />
+                {currentLevel === -1 ? (
+                  <span className="text-[10px] sm:text-xs text-white/80 font-medium hidden sm:inline">
+                    Auto{activeHeight ? ` (${levelLabel(activeHeight)})` : ""}
+                  </span>
+                ) : (
+                  <span className="text-[10px] sm:text-xs text-emerald-400 font-medium hidden sm:inline">
+                    {levelLabel(levels.find((l) => l.index === currentLevel)?.height ?? 0)}
+                  </span>
+                )}
+              </button>
+            )}
+            {showQualityMenu && levels.length > 0 && (
+              <div
+                className="absolute bottom-full right-0 mb-2 w-40 rounded-lg bg-black/95 backdrop-blur border border-white/10 shadow-xl py-1 z-20"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-white/40">
+                  Quality
+                </div>
+                <button
+                  onClick={() => changeLevel(-1)}
+                  className={`w-full flex items-center justify-between px-3 py-1.5 text-xs hover:bg-white/10 transition-colors ${
+                    currentLevel === -1 ? "text-emerald-400" : "text-white/90"
+                  }`}
+                >
+                  <span>Auto{activeHeight ? ` (${levelLabel(activeHeight)})` : ""}</span>
+                  {currentLevel === -1 && <Check className="h-3 w-3" />}
+                </button>
+                {levels.map((l) => {
+                  const isSelected = currentLevel === l.index;
+                  return (
+                    <button
+                      key={l.index}
+                      onClick={() => changeLevel(l.index)}
+                      className={`w-full flex items-center justify-between px-3 py-1.5 text-xs hover:bg-white/10 transition-colors ${
+                        isSelected ? "text-emerald-400" : "text-white/90"
+                      }`}
+                    >
+                      <span>{levelLabel(l.height)}</span>
+                      {isSelected && <Check className="h-3 w-3" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            </div>
           <button
             onClick={() => { toggleFullscreen(); revealControls(); }}
             className="p-2 rounded-lg hover:bg-white/10 active:bg-white/20 transition-colors"
@@ -401,6 +552,7 @@ function HLSPlayer({
               <Maximize className="h-5 w-5 text-white" />
             )}
           </button>
+          </div>
         </div>
       </div>
     </div>
