@@ -81,6 +81,12 @@ const STREAM_CHANNELS = [
     quality: "HD",
     url: "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan11/live.livx/playlist.m3u8",
   },
+  {
+    id: "cazetv",
+    name: "Caze TV",
+    quality: "HD",
+    url: "https://dfr80qz435crc.cloudfront.net/MNOP/Amagi/Caze/Caze_TV_BR/Caze_TV.m3u8",
+  },
 ];
 
 // ─── Stream Error Diagnostics ───────────────────────────────────────────────
