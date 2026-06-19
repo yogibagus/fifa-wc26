@@ -46,6 +46,7 @@ import {
   getMatchStatus,
   getCountryFlag,
   convertTimeToUserTimezone,
+  isMatchLive,
 } from "@/lib/data";
 
 // ─── Stream Channels ────────────────────────────────────────────────────────
@@ -73,6 +74,12 @@ const STREAM_CHANNELS = [
     name: "VTV6",
     quality: "HD",
     url: "https://live-a.fptplay53.net/live/media/vtv6/live247-hls-avc/index.m3u8",
+  },
+  {
+    id: "kan11",
+    name: "Kan 11",
+    quality: "HD",
+    url: "https://kancdn.medonecdn.net/livehls/oil/kancdn-live/live/kan11/live.livx/playlist.m3u8",
   },
 ];
 
@@ -521,7 +528,7 @@ function MatchCard({
                           <div key={`g1-${i}`} className="flex items-center gap-2 text-xs ml-2">
                             <span className="text-emerald-400">⚽</span>
                             <span className="font-medium">{g.name}</span>
-                            <span className="text-muted-foreground">{g.minute}&apos;</span>
+                            <span className="text-muted-foreground">{g.minute}'</span>
                             {g.penalty && (
                               <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
                                 PEN
@@ -546,7 +553,7 @@ function MatchCard({
                           <div key={`g2-${i}`} className="flex items-center gap-2 text-xs ml-2">
                             <span className="text-emerald-400">⚽</span>
                             <span className="font-medium">{g.name}</span>
-                            <span className="text-muted-foreground">{g.minute}&apos;</span>
+                            <span className="text-muted-foreground">{g.minute}'</span>
                             {g.penalty && (
                               <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
                                 PEN
@@ -826,6 +833,14 @@ function LiveStreamSchedule({
   matches: Match[];
   onWatchLive: (match: Match) => void;
 }) {
+  // Re-render every 60s so the LIVE badge reflects the actual kickoff time
+  // without requiring a manual page reload.
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setNowTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   // Get next 2 upcoming dates
   const upcomingByDate = useMemo(() => {
     const upcoming = matches.filter((m) => !m.score?.ft);
@@ -853,7 +868,7 @@ function LiveStreamSchedule({
         </CardHeader>
         <CardContent className="pt-0">
           <p className="text-sm text-muted-foreground text-center py-6">
-            Tournament hasn&apos;t started yet. Stay tuned!
+            Tournament hasn't started yet. Stay tuned!
           </p>
         </CardContent>
       </Card>
@@ -885,10 +900,16 @@ function LiveStreamSchedule({
             </CardHeader>
             <CardContent className="pt-0">
               <div className="space-y-1.5 sm:space-y-2">
-                {dateMatches.map((match, idx) => (
+                {dateMatches.map((match, idx) => {
+                  const live = isMatchLive(match);
+                  return (
                   <div
                     key={idx}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors group gap-1.5 sm:gap-0"
+                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 rounded-lg border transition-colors group gap-1.5 sm:gap-0 ${
+                      live
+                        ? "border-red-500/40 bg-red-500/5"
+                        : "border-border/50 hover:bg-muted/30"
+                    }`}
                   >
                     <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm min-w-0">
                       <span className="text-sm sm:text-base">{getCountryFlag(match.team1)}</span>
@@ -898,6 +919,11 @@ function LiveStreamSchedule({
                       <span className="text-sm sm:text-base">{getCountryFlag(match.team2)}</span>
                     </div>
                     <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 sm:ml-2 flex-wrap">
+                      {live && (
+                        <Badge className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 h-4 sm:h-5 bg-red-500 text-white animate-pulse">
+                          LIVE
+                        </Badge>
+                      )}
                       {match.time && (
                         <Badge variant="outline" className="text-[9px] sm:text-[10px] gap-0.5 sm:gap-1 px-1 sm:px-1.5 py-0 h-4 sm:h-5 whitespace-nowrap">
                           <Clock className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
@@ -920,7 +946,8 @@ function LiveStreamSchedule({
                       </Button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -1052,6 +1079,14 @@ function MatchDetailView({
   match: Match;
   onBack: () => void;
 }) {
+  // Re-render every 30s so the LIVE NOW badge on this page follows the actual
+  // kickoff time, matching the Live Stream Schedule behavior.
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setNowTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const [selectedChannel, setSelectedChannel] = useState(STREAM_CHANNELS[0]);
   // Track channel IDs that have failed (CORS / geo-block / offline) so the UI
   // can grey them out and we can auto-rotate to a healthy one.
@@ -1103,7 +1138,7 @@ function MatchDetailView({
         </Button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-            {getMatchStatus(match) === "live" && (
+            {isMatchLive(match) && (
               <Badge className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 h-4 sm:h-5 bg-red-500 text-white animate-pulse">
                 LIVE NOW
               </Badge>
@@ -1265,7 +1300,7 @@ function MatchDetailView({
                     <div key={i} className="flex items-center gap-2 text-xs">
                       <span className="text-emerald-400">⚽</span>
                       <span className="font-medium">{g.name}</span>
-                      <span className="text-muted-foreground">{g.minute}&apos;</span>
+                      <span className="text-muted-foreground">{g.minute}'</span>
                       {g.penalty && (
                         <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
                           PEN
@@ -1292,7 +1327,7 @@ function MatchDetailView({
                     <div key={i} className="flex items-center gap-2 text-xs">
                       <span className="text-emerald-400">⚽</span>
                       <span className="font-medium">{g.name}</span>
-                      <span className="text-muted-foreground">{g.minute}&apos;</span>
+                      <span className="text-muted-foreground">{g.minute}'</span>
                       {g.penalty && (
                         <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
                           PEN

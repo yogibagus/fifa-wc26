@@ -115,39 +115,38 @@ export function formatDate(dateStr: string): string {
 
 export function convertTimeToUserTimezone(dateStr: string, timeStr: string): { time: string; date: string } {
   if (!timeStr || timeStr === "TBD") return { time: timeStr, date: dateStr };
-  
+
   // Parse time and timezone offset from format like "13:00 UTC-6"
   const match = timeStr.match(/(\d{1,2}):(\d{2})(?:\s+UTC([+-]\d+))?/);
   if (!match) return { time: timeStr, date: dateStr };
-  
+
   const [, hourStr, minuteStr, utcOffsetStr] = match;
-  const hour = parseInt(hourStr);
-  const minute = parseInt(minuteStr);
   const utcOffset = utcOffsetStr ? parseInt(utcOffsetStr) : 0; // Offset in hours
-  
+
   // Create a UTC date from the local match time
   // If match is "13:00 UTC-6", that means 13:00 in UTC-6 = 19:00 UTC
   const utcDate = new Date(dateStr + "T" + hourStr + ":" + minuteStr + ":00Z");
   utcDate.setHours(utcDate.getHours() - utcOffset);
-  
+
   // Now convert to user's local timezone
   const localTime = utcDate.toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
   });
-  
+
   const localDate = utcDate.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
-  
+
   return { time: localTime, date: localDate };
 }
 
 export function getMatchStatus(match: Match): "completed" | "upcoming" | "live" {
   if (match.score?.ft) return "completed";
+  if (isMatchLive(match)) return "live";
   const matchDate = new Date(match.date + "T00:00:00Z");
   const now = new Date();
   const userToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -155,6 +154,41 @@ export function getMatchStatus(match: Match): "completed" | "upcoming" | "live" 
   if (userMatchDate.getTime() === userToday.getTime()) return "live";
   if (matchDate < now) return "completed";
   return "upcoming";
+}
+
+/**
+ * Determines whether a match is currently being played, based on its
+ * actual kickoff time (not just the date). A match is considered live
+ * from kickoff until ~2.5 hours later (covers stoppage + extra time +
+ * penalties), or until a final score is recorded.
+ */
+export function isMatchLive(match: Match): boolean {
+  if (match.score?.ft) return false;
+  if (!match.time || match.time === "TBD") return false;
+
+  const kickoff = getKickoffUtcTimestamp(match.date, match.time);
+  if (kickoff === null) return false;
+
+  const now = Date.now();
+  const end = kickoff + 2.5 * 60 * 60 * 1000; // +2.5h
+  return now >= kickoff && now <= end;
+}
+
+/**
+ * Parses a kickoff time string like "13:00 UTC-6" into a true UTC
+ * timestamp (ms since epoch). Returns null if the format is unrecognized.
+ */
+export function getKickoffUtcTimestamp(dateStr: string, timeStr: string): number | null {
+  const match = timeStr.match(/(\d{1,2}):(\d{2})(?:\s+UTC([+-]\d+))?/);
+  if (!match) return null;
+
+  const [, hourStr, minuteStr, utcOffsetStr] = match;
+  const utcOffset = utcOffsetStr ? parseInt(utcOffsetStr, 10) : 0;
+
+  // "13:00 UTC-6" means 13:00 local-to-UTC-6 => 19:00 UTC.
+  const utcDate = new Date(dateStr + "T" + hourStr + ":" + minuteStr + ":00Z");
+  utcDate.setHours(utcDate.getHours() - utcOffset);
+  return utcDate.getTime();
 }
 
 export function getCountryFlag(teamName: string): string {
@@ -177,7 +211,7 @@ export function getCountryFlag(teamName: string): string {
     "Poland": "🇵🇱", "Croatia": "🇭🇷", "Denmark": "🇩🇰", "Serbia": "🇷🇸",
     "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Italy": "🇮🇹", "Romania": "🇷🇴", "Greece": "🇬🇷",
     "Congo": "🇨🇬", "Guinea": "🇬🇳", "Mali": "🇲🇱", "Gabon": "🇬🇦",
-    "Venezuela": "🇻🇪", "Paraguay": "🇵🇾", "Honduras": "🇭🇳",
+    "Venezuela": "🇻🇪", "Honduras": "🇭🇳",
   };
 
   // For placeholder teams like "1A", "2B", "W73", etc.
