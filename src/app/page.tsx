@@ -151,6 +151,8 @@ function HLSPlayer({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(true);
+  // Ref to the auto-hide timeout so mouse-move can reset it.
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ─── Quality / Resolution Selection ──────────────────────────────────────
   // `levels` are populated from hls.js once the manifest is parsed.
@@ -168,18 +170,34 @@ function HLSPlayer({
 
   const QUALITY_STORAGE_KEY = "fifa-quality-level";
 
-  // Auto-hide controls after 3s when playing
-  useEffect(() => {
-    if (isPlaying) {
-      const timer = setTimeout(() => setShowControls(false), 3000);
-      return () => clearTimeout(timer);
-    }
-    // When not playing, controls stay visible (initial state is true)
-  }, [isPlaying]);
+  // Auto-hide controls after 3s of inactivity while playing.
+  // Works in fullscreen too: any mouse movement over the player resets the
+  // timer and briefly reveals the controls; they fade out if idle.
+  const scheduleHide = useCallback(() => {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 3000);
+  }, []);
 
   const revealControls = useCallback(() => {
     setShowControls(true);
-  }, []);
+    scheduleHide();
+  }, [scheduleHide]);
+
+  // Start/stop the auto-hide cycle based on play state.
+  useEffect(() => {
+    if (isPlaying) {
+      scheduleHide();
+    } else {
+      // Paused — keep controls visible and cancel any pending hide.
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      setShowControls(true);
+    }
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, [isPlaying, scheduleHide]);
 
   // Track current channel to reset state on change
   const [currentChannelId, setCurrentChannelId] = useState(channelId);
@@ -304,13 +322,26 @@ function HLSPlayer({
     };
   }, [url, channelId]);
 
-  // Fullscreen change listener
+  // Fullscreen change listener.
+  // Tracks both the standard Fullscreen API (desktop + Android Chrome) and
+  // iOS Safari's native video-element fullscreen via webkit events.
   useEffect(() => {
     const handleFsChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
     };
+    const handleWebkitBegin = () => setIsFullscreen(true);
+    const handleWebkitEnd = () => setIsFullscreen(false);
+
     document.addEventListener("fullscreenchange", handleFsChange);
-    return () => document.removeEventListener("fullscreenchange", handleFsChange);
+    const video = videoRef.current;
+    video?.addEventListener("webkitbeginfullscreen", handleWebkitBegin);
+    video?.addEventListener("webkitendfullscreen", handleWebkitEnd);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFsChange);
+      video?.removeEventListener("webkitbeginfullscreen", handleWebkitBegin);
+      video?.removeEventListener("webkitendfullscreen", handleWebkitEnd);
+    };
   }, []);
 
   const togglePlay = useCallback(async () => {
@@ -338,15 +369,44 @@ function HLSPlayer({
 
   const toggleFullscreen = useCallback(async () => {
     const container = containerRef.current;
+    const video = videoRef.current;
     if (!container) return;
+
+    // Standard Fullscreen API (desktop + Android Chrome), with webkit fallbacks.
+    const el = container as HTMLDivElement & {
+      webkitRequestFullscreen?: () => Promise<void>;
+    };
+
     try {
-      if (!document.fullscreenElement) {
-        await container.requestFullscreen();
-      } else {
+      // Currently in standard fullscreen — exit.
+      if (document.fullscreenElement) {
         await document.exitFullscreen();
+        return;
+      }
+      // Currently in iOS native fullscreen — exit via video element.
+      if (video && (video as HTMLVideoElement & { webkitDisplayingFullscreen?: boolean }).webkitDisplayingFullscreen) {
+        (video as HTMLVideoElement & { webkitExitFullscreen?: () => void }).webkitExitFullscreen?.();
+        return;
+      }
+
+      // Enter standard fullscreen (container), with webkit fallback.
+      if (container.requestFullscreen) {
+        await container.requestFullscreen();
+      } else if (el.webkitRequestFullscreen) {
+        await el.webkitRequestFullscreen();
+      } else if (video) {
+        // iOS Safari only allows the <video> element itself to go fullscreen.
+        const v = video as HTMLVideoElement & {
+          webkitEnterFullscreen?: () => void;
+        };
+        if (v.webkitEnterFullscreen) {
+          v.webkitEnterFullscreen();
+        }
+      } else {
+        // No fullscreen support at all — surface nothing silently.
       }
     } catch {
-      // fullscreen not supported
+      // Fullscreen request rejected (e.g. not triggered by user gesture).
     }
   }, []);
 
@@ -385,7 +445,21 @@ function HLSPlayer({
   return (
     <div
       ref={containerRef}
-      className="relative bg-black rounded-xl overflow-hidden group"
+      className={`relative bg-black rounded-xl overflow-hidden group ${
+        isPlaying && !showControls ? "cursor-none" : "cursor-auto"
+      }`}
+      onMouseMove={() => {
+        // Any cursor movement over the player (including in fullscreen)
+        // reveals the controls and resets the auto-hide timer.
+        if (isPlaying) revealControls();
+      }}
+      onMouseLeave={() => {
+        // Cursor left the player — hide immediately if playing.
+        if (isPlaying && hideTimerRef.current) {
+          clearTimeout(hideTimerRef.current);
+          setShowControls(false);
+        }
+      }}
     >
       <video
         ref={videoRef}
