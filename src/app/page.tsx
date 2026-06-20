@@ -69,13 +69,13 @@ const STREAM_CHANNELS = [
     id: "vtv3",
     name: "VTV3",
     quality: "HD",
-    url: "https://live.fptplay53.net/live/media/vtv3/live247-hls-avc/index.m3u8",
+    url: "https://vtvgolive-failover.vtvdigital.vn/vtvgo/vtv3-manifest.m3u8",
   },
   {
     id: "vtv6",
     name: "VTV6",
     quality: "HD",
-    url: "https://live-a.fptplay53.net/live/media/vtv6/live247-hls-avc/index.m3u8",
+    url: "https://vtvgolive-failover.vtvdigital.vn/vtvgo/vtv6tt-manifest.m3u8",
   },
   {
     id: "kan11",
